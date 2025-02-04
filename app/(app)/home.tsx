@@ -3,10 +3,11 @@ import { View, FlatList, StyleSheet, Dimensions, ActivityIndicator, Text, Toucha
 import { Video, VideoFeed } from '../../types/video';
 import { VideoService } from '../../services/firebase/video';
 import VideoCard from '../../components/VideoCard';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 
-const { height } = Dimensions.get('window');
+const { height: WINDOW_HEIGHT } = Dimensions.get('window');
+const TAB_BAR_HEIGHT = 49; // Standard tab bar height
+const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
 export default function Home() {
   const [feedState, setFeedState] = useState<VideoFeed>({
@@ -15,6 +16,7 @@ export default function Home() {
     error: undefined,
   });
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     loadVideos();
@@ -52,8 +54,18 @@ export default function Home() {
     }
   };
 
-  const renderVideo = ({ item }: { item: Video }) => (
-    <VideoCard video={item} isActive={true} />
+  const onViewableItemsChanged = React.useCallback(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }, []);
+
+  const viewabilityConfig = React.useMemo(() => ({
+    itemVisiblePercentThreshold: 50
+  }), []);
+
+  const renderVideo = ({ item, index }: { item: Video; index: number }) => (
+    <VideoCard video={item} isActive={index === currentIndex} />
   );
 
   if (feedState.loading && !feedState.videos.length) {
@@ -96,12 +108,22 @@ export default function Home() {
         keyExtractor={(item) => item.id}
         onEndReached={() => loadVideos(true)}
         onEndReachedThreshold={0.5}
-        snapToInterval={height}
+        snapToInterval={SCREEN_HEIGHT}
+        snapToAlignment="start"
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
-        viewabilityConfig={{
-          itemVisiblePercentThreshold: 50
-        }}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(_, index) => ({
+          length: SCREEN_HEIGHT,
+          offset: SCREEN_HEIGHT * index,
+          index,
+        })}
+        removeClippedSubviews={true}
+        windowSize={3}
+        maxToRenderPerBatch={2}
+        updateCellsBatchingPeriod={100}
+        initialNumToRender={2}
         ListFooterComponent={() =>
           feedState.loading ? (
             <View style={styles.footer}>
@@ -131,7 +153,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   footer: {
-    padding: 20,
+    height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   retryButton: {
     backgroundColor: '#333',

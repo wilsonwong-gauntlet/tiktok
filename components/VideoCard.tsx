@@ -12,7 +12,9 @@ interface VideoCardProps {
   isActive: boolean;
 }
 
-const { width, height } = Dimensions.get('window');
+const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
+const TAB_BAR_HEIGHT = 49; // Standard tab bar height
+const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
 export default function VideoCard({ video, isActive }: VideoCardProps) {
   const [saved, setSaved] = useState(false);
@@ -87,6 +89,10 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
         <VideoView
           style={styles.video}
           player={player}
+          contentFit="cover"
+          allowsFullscreen={false}
+          showsTimecodes={false}
+          nativeControls={false}
         />
         
         {status === 'loading' && (
@@ -100,21 +106,8 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
             <Text style={styles.errorText}>Error loading video</Text>
           </View>
         )}
-
-        {!isPlaying && status === 'readyToPlay' && (
-          <View style={styles.playButtonContainer}>
-            <TouchableOpacity 
-              style={styles.playButton} 
-              onPress={handlePlayPause}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.playButtonText}>▶️</Text>
-            </TouchableOpacity>
-          </View>
-        )}
         
         <View style={styles.overlay}>
-          {/* Right side actions */}
           <View style={styles.rightActions}>
             <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
               <Ionicons 
@@ -148,10 +141,9 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
             )}
           </View>
 
-          {/* Bottom metadata */}
           <View style={styles.bottomMetadata}>
-            <Text style={styles.title}>{video.title}</Text>
-            <Text style={styles.author}>{video.authorName}</Text>
+            <Text style={styles.title} numberOfLines={1}>{video.title}</Text>
+            <Text style={styles.author} numberOfLines={1}>{video.authorName}</Text>
             <Text style={styles.description} numberOfLines={2}>
               {video.description}
             </Text>
@@ -173,74 +165,35 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    width,
-    height: height,
+    width: WINDOW_WIDTH,
+    height: SCREEN_HEIGHT,
     backgroundColor: '#000',
   },
   videoContainer: {
     flex: 1,
-    position: 'relative',
   },
   video: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#000',
-  },
-  loadingContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 2,
-  },
-  errorContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 20,
-    zIndex: 2,
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  playButtonContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 3,
-  },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playButtonText: {
-    fontSize: 40,
+    flex: 1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     flexDirection: 'row',
-    zIndex: 4,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingBottom: 20,
   },
   rightActions: {
     position: 'absolute',
     right: 8,
-    bottom: 100,
+    bottom: 60, // Adjusted to account for tab bar
     alignItems: 'center',
-    gap: 20,
+    gap: 16,
   },
   actionButton: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 45,
+    marginBottom: 8,
   },
   actionText: {
     color: '#fff',
@@ -249,28 +202,52 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomMetadata: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: 16,
-    paddingRight: 80, // Make space for right actions
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingRight: 80,
+    marginBottom: 16, // Adjusted to account for tab bar
   },
   title: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   author: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '500',
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   description: {
     color: '#fff',
-    fontSize: 13,
-    opacity: 0.9,
+    fontSize: 14,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  loadingContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  errorContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 20,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    textAlign: 'center',
   },
 }); 
