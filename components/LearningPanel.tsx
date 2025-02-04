@@ -16,7 +16,37 @@ interface LearningPanelProps {
   quiz?: Quiz;
 }
 
-type Tab = 'summary' | 'notes' | 'quiz' | 'reading';
+type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition';
+
+interface ReflectionPrompts {
+  understanding: string[];
+  gaps: string[];
+  applications: string[];
+  connections: string[];
+}
+
+const REFLECTION_TEMPLATE: ReflectionPrompts = {
+  understanding: [
+    "What are the key concepts I learned?",
+    "How would I explain this to someone else?",
+    "What examples demonstrate these concepts?",
+  ],
+  gaps: [
+    "What parts am I unsure about?",
+    "Which concepts need more practice?",
+    "What questions remain unanswered?",
+  ],
+  applications: [
+    "How can I apply this in real situations?",
+    "What projects could I build with this?",
+    "How does this connect to my goals?",
+  ],
+  connections: [
+    "How does this relate to what I already know?",
+    "What other topics connect to this?",
+    "What deeper principles are at work here?",
+  ],
+};
 
 export default function LearningPanel({
   visible,
@@ -121,26 +151,58 @@ export default function LearningPanel({
       case 'notes':
         return (
           <ScrollView style={styles.content}>
-            <Text style={styles.label}>My Notes</Text>
+            <Text style={styles.label}>Quick Capture</Text>
             <TextInput
               style={styles.notesInput}
               multiline
-              placeholder="Write your thoughts..."
+              placeholder="Write your immediate thoughts..."
               placeholderTextColor="#666"
               value={notes}
               onChangeText={setNotes}
             />
+            
+            <Text style={styles.sectionTitle}>Structured Reflection</Text>
+            {Object.entries(REFLECTION_TEMPLATE).map(([section, prompts]) => (
+              <View key={section} style={styles.reflectionSection}>
+                <Text style={styles.reflectionTitle}>
+                  {section.charAt(0).toUpperCase() + section.slice(1)}
+                </Text>
+                {prompts.map((prompt, index) => (
+                  <View key={index} style={styles.promptContainer}>
+                    <Text style={styles.promptText}>{prompt}</Text>
+                    <TextInput
+                      style={styles.reflectionInput}
+                      multiline
+                      placeholder="Your thoughts..."
+                      placeholderTextColor="#666"
+                    />
+                  </View>
+                ))}
+              </View>
+            ))}
+
             <Text style={styles.label}>Key Takeaways</Text>
             {keyTakeaways.map((takeaway, index) => (
               <View key={index} style={styles.takeawayContainer}>
-                <Text style={styles.takeawayText}>{takeaway}</Text>
+                <TextInput
+                  style={styles.takeawayInput}
+                  value={takeaway}
+                  onChangeText={(text) => {
+                    const newTakeaways = [...keyTakeaways];
+                    newTakeaways[index] = text;
+                    setKeyTakeaways(newTakeaways);
+                  }}
+                  placeholder="Enter a key takeaway..."
+                  placeholderTextColor="#666"
+                />
               </View>
             ))}
+            
             <TouchableOpacity 
-              style={styles.addButton}
-              onPress={() => setKeyTakeaways([...keyTakeaways, ''])}
+              style={styles.button}
+              onPress={handleSaveNotes}
             >
-              <Text style={styles.addButtonText}>+ Add Takeaway</Text>
+              <Text style={styles.buttonText}>Save Reflection</Text>
             </TouchableOpacity>
           </ScrollView>
         );
@@ -157,6 +219,83 @@ export default function LearningPanel({
                 )}
               </View>
             ))}
+          </ScrollView>
+        );
+      case 'intuition':
+        return (
+          <ScrollView style={styles.content}>
+            <View style={styles.intuitionSection}>
+              <Text style={styles.sectionTitle}>Mental Models</Text>
+              <Text style={styles.promptText}>
+                How would you explain this concept to a:
+              </Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="5-year-old child..."
+                placeholderTextColor="#666"
+              />
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="High school student..."
+                placeholderTextColor="#666"
+              />
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="Expert in a different field..."
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.intuitionSection}>
+              <Text style={styles.sectionTitle}>Visual Understanding</Text>
+              <Text style={styles.promptText}>
+                Draw or describe a visual metaphor for this concept:
+              </Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="Describe your visual metaphor..."
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.intuitionSection}>
+              <Text style={styles.sectionTitle}>Pattern Recognition</Text>
+              <Text style={styles.promptText}>
+                What patterns or principles do you notice?
+              </Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="Describe the patterns you see..."
+                placeholderTextColor="#666"
+              />
+              <Text style={styles.promptText}>
+                Where else have you seen similar patterns?
+              </Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="List similar patterns in other contexts..."
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.intuitionSection}>
+              <Text style={styles.sectionTitle}>Edge Cases</Text>
+              <Text style={styles.promptText}>
+                When might this concept break down or not apply?
+              </Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="Describe edge cases and limitations..."
+                placeholderTextColor="#666"
+              />
+            </View>
           </ScrollView>
         );
     }
@@ -258,6 +397,7 @@ export default function LearningPanel({
             {renderTab('notes', 'Notes', 'pencil-outline')}
             {renderTab('quiz', 'Quiz', 'school-outline')}
             {renderTab('reading', 'Reading', 'book-outline')}
+            {renderTab('intuition', 'Intuition', 'bulb-outline')}
           </View>
 
           {renderContent()}
@@ -438,5 +578,49 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  reflectionSection: {
+    marginBottom: 20,
+  },
+  reflectionTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  promptContainer: {
+    marginBottom: 10,
+  },
+  promptText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reflectionInput: {
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  takeawayInput: {
+    backgroundColor: '#222',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  intuitionSection: {
+    marginBottom: 20,
   },
 }); 

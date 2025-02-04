@@ -2,20 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, fetchSavedVideos } from '../../services/firebase/index';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { auth } from '../../services/firebase/index';
+import { router } from 'expo-router';
+import { signOut } from 'firebase/auth';
+import { fetchSavedVideos } from '../../services/firebase/index';
 import { Video } from '../../types/video';
+import LearningDashboard from '../../components/LearningDashboard';
 
 export default function Profile() {
-  const router = useRouter();
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      loadSavedVideos();
-    }, [])
-  );
+  useEffect(() => {
+    loadSavedVideos();
+  }, []);
 
   const loadSavedVideos = async () => {
     if (!auth.currentUser) return;
@@ -33,7 +33,7 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     try {
-      await auth.signOut();
+      await signOut(auth);
       router.replace('/login');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -46,6 +46,16 @@ export default function Profile() {
       params: { videoId }
     });
   };
+
+  const handleConceptSelect = (concept: any) => {
+    // TODO: Navigate to concept detail view
+    console.log('Selected concept:', concept);
+  };
+
+  if (!auth.currentUser) {
+    router.replace('/login');
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -60,7 +70,7 @@ export default function Profile() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Learning Progress</Text>
           <View style={styles.progressContainer}>
-            <Text style={styles.text}>Coming soon!</Text>
+            <LearningDashboard onConceptSelect={handleConceptSelect} />
           </View>
         </View>
 

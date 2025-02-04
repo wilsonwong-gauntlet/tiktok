@@ -71,6 +71,7 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
     }
   };
 
+  
   const handleLearn = () => {
     setLearningPanelVisible(true);
   };

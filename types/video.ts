@@ -47,6 +47,11 @@ export interface Video {
   viewCount: number;
   authorId: string;
   authorName: string;
+  concepts: LearningConcept[];
+  retentionSchedule?: {
+    initialReview: number;  // hours after watching
+    reviewIntervals: number[];  // hours between reviews
+  };
 }
 
 export interface FurtherReading {
@@ -85,4 +90,31 @@ export interface UserPreferences {
       completedVideos: number;
     };
   };
+}
+
+export interface RetentionPrompt {
+  id: string;
+  conceptId: string;
+  prompt: string;
+  lastReviewed?: Date;
+  nextReview?: Date;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface TransferTask {
+  id: string;
+  conceptId: string;
+  task: string;
+  context: string;  // New context to apply the concept
+  difficulty: 'basic' | 'intermediate' | 'advanced';
+  completionCriteria: string[];
+}
+
+export interface LearningConcept {
+  id: string;
+  name: string;
+  description: string;
+  prerequisites: string[];
+  retentionPrompts: RetentionPrompt[];
+  transferTasks: TransferTask[];
 } 

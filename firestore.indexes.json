@@ -1,0 +1,22 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "learningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "nextReview", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "learningProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "nextReview", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+} 
