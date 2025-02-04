@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { initializeApp, getApp } from 'firebase/app';
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   getFirestore, 
@@ -10,7 +10,9 @@ import {
   getDocs,
   startAfter,
   doc,
-  getDoc
+  getDoc,
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { Video } from '../types/video';
 
@@ -24,16 +26,31 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
-export const db = getFirestore(app);
+let app;
+try {
+  app = getApp();
+} catch {
+  app = initializeApp(firebaseConfig);
+}
+
+// Initialize Auth with persistence
+let auth;
+try {
+  auth = getAuth(app);
+} catch {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+}
+
+// Initialize Firestore
+const db = getFirestore(app);
 
 const VIDEOS_PER_PAGE = 10;
 
-export async function fetchVideos(lastVisible?: any) {
+async function fetchVideos(lastVisible?: any) {
   try {
+    console.log('Fetching videos...');
     const videosRef = collection(db, 'videos');
     let videoQuery = query(
       videosRef,
@@ -51,6 +68,7 @@ export async function fetchVideos(lastVisible?: any) {
     }
 
     const snapshot = await getDocs(videoQuery);
+    console.log('Snapshot size:', snapshot.size);
     const lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
     
     const videos = snapshot.docs.map(doc => ({
@@ -58,6 +76,7 @@ export async function fetchVideos(lastVisible?: any) {
       ...doc.data(),
       createdAt: doc.data().createdAt?.toDate()
     })) as Video[];
+    console.log('Processed videos:', videos.length);
 
     return {
       videos,
@@ -69,7 +88,7 @@ export async function fetchVideos(lastVisible?: any) {
   }
 }
 
-export async function fetchVideoById(videoId: string): Promise<Video | null> {
+async function fetchVideoById(videoId: string): Promise<Video | null> {
   try {
     const videoRef = doc(db, 'videos', videoId);
     const videoDoc = await getDoc(videoRef);
@@ -87,4 +106,72 @@ export async function fetchVideoById(videoId: string): Promise<Video | null> {
     console.error('Error fetching video:', error);
     throw error;
   }
-} 
+}
+
+async function addSampleVideos() {
+  try {
+    const videosRef = collection(db, 'videos');
+    const sampleVideos = [
+      {
+        title: 'Introduction to Machine Learning',
+        description: 'A comprehensive overview of machine learning concepts and applications.',
+        url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        thumbnailUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
+        duration: 120,
+        createdAt: serverTimestamp(),
+        category: 'Technology',
+        tags: ['machine learning', 'AI', 'technology'],
+        aiSummary: 'This video covers the basics of machine learning, including supervised and unsupervised learning.',
+        furtherReading: [
+          {
+            title: 'Machine Learning Guide',
+            url: 'https://example.com/ml-guide',
+            description: 'A detailed guide to machine learning concepts'
+          }
+        ],
+        viewCount: 0,
+        authorId: 'sample-author',
+        authorName: 'AI Learning Channel'
+      },
+      {
+        title: 'Understanding Quantum Computing',
+        description: 'Deep dive into quantum computing principles and applications.',
+        url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+        thumbnailUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
+        duration: 180,
+        createdAt: serverTimestamp(),
+        category: 'Physics',
+        tags: ['quantum computing', 'physics', 'technology'],
+        aiSummary: 'An exploration of quantum computing fundamentals and their potential impact.',
+        furtherReading: [
+          {
+            title: 'Quantum Computing Basics',
+            url: 'https://example.com/quantum-guide',
+            description: 'Introduction to quantum computing concepts'
+          }
+        ],
+        viewCount: 0,
+        authorId: 'sample-author',
+        authorName: 'Quantum Physics Explained'
+      }
+    ];
+
+    for (const video of sampleVideos) {
+      await addDoc(videosRef, video);
+    }
+
+    console.log('Added sample videos successfully');
+  } catch (error) {
+    console.error('Error adding sample videos:', error);
+    throw error;
+  }
+}
+
+export { 
+  app, 
+  auth, 
+  db,
+  fetchVideos,
+  fetchVideoById,
+  addSampleVideos
+}; 
