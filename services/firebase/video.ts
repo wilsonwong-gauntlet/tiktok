@@ -99,6 +99,36 @@ export class VideoService {
               description: 'A detailed guide to machine learning concepts'
             }
           ],
+          quiz: {
+            id: 'ml-intro-quiz',
+            videoId: 'intro-to-ml',
+            questions: [
+              {
+                id: 'q1',
+                question: 'What is the main difference between supervised and unsupervised learning?',
+                options: [
+                  'Supervised learning requires a GPU, unsupervised doesn\'t',
+                  'Supervised learning uses labeled data, unsupervised learning doesn\'t',
+                  'Supervised learning is faster than unsupervised learning',
+                  'There is no difference between them'
+                ],
+                correctOptionIndex: 1,
+                explanation: 'Supervised learning uses labeled data to train models, while unsupervised learning finds patterns in unlabeled data.'
+              },
+              {
+                id: 'q2',
+                question: 'Which of these is an example of supervised learning?',
+                options: [
+                  'Clustering customer groups',
+                  'Finding anomalies in data',
+                  'Email spam classification',
+                  'Dimensionality reduction'
+                ],
+                correctOptionIndex: 2,
+                explanation: 'Email spam classification is a supervised learning task because it uses labeled examples of spam and non-spam emails.'
+              }
+            ]
+          },
           viewCount: 0,
           authorId: 'sample-author',
           authorName: 'AI Learning Channel'

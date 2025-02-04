@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter, useSegments } from 'expo-router';
 import { auth } from '../services/firebase/index';
+import { VideoSaveProvider } from '../contexts/VideoSaveContext';
 
 export default function RootLayout() {
   const segments = useSegments();
@@ -25,10 +26,12 @@ export default function RootLayout() {
   }, [segments]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="(app)" options={{ headerShown: false }} />
-    </Stack>
+    <VideoSaveProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="(app)" options={{ headerShown: false }} />
+      </Stack>
+    </VideoSaveProvider>
   );
 }

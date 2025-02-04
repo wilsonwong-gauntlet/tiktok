@@ -1,3 +1,36 @@
+export interface Note {
+  id: string;
+  userId: string;
+  videoId: string;
+  content: string;
+  keyTakeaways: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+  explanation: string;
+}
+
+export interface Quiz {
+  id: string;
+  videoId: string;
+  questions: QuizQuestion[];
+}
+
+export interface QuizAttempt {
+  id: string;
+  userId: string;
+  quizId: string;
+  answers: number[];
+  score: number;
+  completedAt: Date;
+}
+
 export interface Video {
   id: string;
   title: string;
@@ -10,6 +43,7 @@ export interface Video {
   tags: string[];
   aiSummary?: string;
   furtherReading?: FurtherReading[];
+  quiz?: Quiz;
   viewCount: number;
   authorId: string;
   authorName: string;

@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video as VideoType } from '../types/video';
 import { auth, saveVideo, unsaveVideo, isVideoSaved } from '../services/firebase/index';
 import { useEvent } from 'expo';
-import VideoInfoModal from './VideoInfoModal';
+import LearningPanel from './LearningPanel';
+import { useVideoSave } from '../contexts/VideoSaveContext';
 
 interface VideoCardProps {
   video: VideoType;
@@ -18,8 +19,8 @@ const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
 export default function VideoCard({ video, isActive }: VideoCardProps) {
   const [saved, setSaved] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'summary' | 'reading'>('summary');
+  const [learningPanelVisible, setLearningPanelVisible] = useState(false);
+  const { notifyVideoSaveChanged } = useVideoSave();
   
   const player = useVideoPlayer(video.url, player => {
     console.log('Video source:', video.url);
@@ -56,6 +57,7 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
         await saveVideo(auth.currentUser.uid, video.id);
         setSaved(true);
       }
+      notifyVideoSaveChanged(video.id);
     } catch (error) {
       console.error('Error toggling save:', error);
     }
@@ -69,14 +71,8 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
     }
   };
 
-  const handleShowSummary = () => {
-    setModalType('summary');
-    setModalVisible(true);
-  };
-
-  const handleShowReading = () => {
-    setModalType('reading');
-    setModalVisible(true);
+  const handleLearn = () => {
+    setLearningPanelVisible(true);
   };
 
   return (
@@ -118,27 +114,14 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
               <Text style={styles.actionText}>Save</Text>
             </TouchableOpacity>
             
-            {video.aiSummary && (
-              <TouchableOpacity style={styles.actionButton} onPress={handleShowSummary}>
-                <Ionicons 
-                  name="document-text-outline" 
-                  size={32} 
-                  color="#fff" 
-                />
-                <Text style={styles.actionText}>AI Summary</Text>
-              </TouchableOpacity>
-            )}
-            
-            {video.furtherReading && video.furtherReading.length > 0 && (
-              <TouchableOpacity style={styles.actionButton} onPress={handleShowReading}>
-                <Ionicons 
-                  name="book-outline" 
-                  size={32} 
-                  color="#fff" 
-                />
-                <Text style={styles.actionText}>Reading</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.actionButton} onPress={handleLearn}>
+              <Ionicons 
+                name="school-outline" 
+                size={32} 
+                color="#fff" 
+              />
+              <Text style={styles.actionText}>Learn</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.bottomMetadata}>
@@ -151,13 +134,14 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
         </View>
       </TouchableOpacity>
 
-      <VideoInfoModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
+      <LearningPanel
+        visible={learningPanelVisible}
+        onClose={() => setLearningPanelVisible(false)}
         title={video.title}
+        videoId={video.id}
         aiSummary={video.aiSummary}
         furtherReading={video.furtherReading}
-        type={modalType}
+        quiz={video.quiz}
       />
     </View>
   );

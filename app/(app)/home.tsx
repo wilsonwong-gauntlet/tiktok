@@ -4,12 +4,14 @@ import { Video, VideoFeed } from '../../types/video';
 import { VideoService } from '../../services/firebase/video';
 import VideoCard from '../../components/VideoCard';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
+import { useLocalSearchParams } from 'expo-router';
 
 const { height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
 export default function Home() {
+  const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const [feedState, setFeedState] = useState<VideoFeed>({
     videos: [],
     loading: true,
@@ -21,6 +23,15 @@ export default function Home() {
   useEffect(() => {
     loadVideos();
   }, []);
+
+  useEffect(() => {
+    if (videoId && feedState.videos.length > 0) {
+      const index = feedState.videos.findIndex(v => v.id === videoId);
+      if (index !== -1) {
+        setCurrentIndex(index);
+      }
+    }
+  }, [videoId, feedState.videos]);
 
   const loadVideos = async (loadMore = false) => {
     try {

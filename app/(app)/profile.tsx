@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, fetchSavedVideos } from '../../services/firebase/index';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Video } from '../../types/video';
 
 export default function Profile() {
@@ -11,9 +11,11 @@ export default function Profile() {
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSavedVideos();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSavedVideos();
+    }, [])
+  );
 
   const loadSavedVideos = async () => {
     if (!auth.currentUser) return;
