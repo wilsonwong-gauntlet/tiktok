@@ -14,7 +14,7 @@ import {
   addDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { Video } from '../types/video';
+import { Video } from '../../types/video';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCA5xFRAu19FpUTFgXxzWWnyZ3_ZqOYpRs",
