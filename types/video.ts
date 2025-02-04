@@ -9,21 +9,36 @@ export interface Video {
   category: string;
   tags: string[];
   aiSummary?: string;
-  furtherReading?: {
-    title: string;
-    url: string;
-    description?: string;
-  }[];
+  furtherReading?: FurtherReading[];
   viewCount: number;
   authorId: string;
   authorName: string;
 }
 
+export interface FurtherReading {
+  title: string;
+  url: string;
+  description?: string;
+}
+
 export interface VideoFeed {
   videos: Video[];
-  lastVisible?: any; // For pagination
+  lastVisible?: any; // TODO: Type this properly with Firestore types
   loading: boolean;
   error?: string;
+}
+
+export interface VideoMetadata {
+  title: string;
+  author: string;
+  description: string;
+}
+
+export interface VideoPlaybackState {
+  isPlaying: boolean;
+  isLoading: boolean;
+  error: string | null;
+  progress: number;
 }
 
 export interface UserPreferences {

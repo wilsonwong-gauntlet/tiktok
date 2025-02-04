@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { ResizeMode, Video, AVPlaybackStatus } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import { Video as VideoType } from '../types/video';
+import { useVideoPlayback } from '../hooks/useVideoPlayback';
 
 interface VideoCardProps {
   video: VideoType;
@@ -10,44 +11,14 @@ interface VideoCardProps {
 const { width, height } = Dimensions.get('window');
 
 export default function VideoCard({ video }: VideoCardProps) {
-  const videoRef = useRef<Video>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    console.log('Playback status update:', status);
-    if (status.isLoaded) {
-      setIsLoading(false);
-      setError(null);
-      setIsPlaying(status.isPlaying);
-    } else {
-      setIsLoading(false);
-      if (status.error) {
-        console.error('Video loading error:', status.error);
-        setError(status.error);
-      }
-    }
-  };
-
-  const togglePlayPause = async () => {
-    console.log('Toggle play/pause called, videoRef:', videoRef.current ? 'exists' : 'null');
-    if (!videoRef.current) return;
-    
-    try {
-      if (isPlaying) {
-        console.log('Attempting to pause video');
-        await videoRef.current.pauseAsync();
-      } else {
-        console.log('Attempting to play video');
-        await videoRef.current.playAsync();
-      }
-    } catch (error) {
-      console.error('Error toggling play/pause:', error);
-    }
-  };
-
-  console.log('Rendering video with URL:', video.url);
+  const {
+    videoRef,
+    playbackState,
+    onPlaybackStatusUpdate,
+    togglePlayPause,
+    onLoad,
+    onError,
+  } = useVideoPlayback();
 
   return (
     <View style={styles.container}>
@@ -68,33 +39,26 @@ export default function VideoCard({ video }: VideoCardProps) {
           rate={1.0}
           shouldPlay={false}
           onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          onLoad={() => {
-            console.log('Video loaded');
-            setIsLoading(false);
-          }}
-          onError={(error) => {
-            console.error('Video error:', error);
-            setError(typeof error === 'string' ? error : 'Failed to load video');
-            setIsLoading(false);
-          }}
+          onLoad={onLoad}
+          onError={onError}
           posterSource={{ uri: video.thumbnailUrl }}
           usePoster={true}
           posterStyle={styles.poster}
         />
         
-        {isLoading && (
+        {playbackState.isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
 
-        {error && (
+        {playbackState.error && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Error loading video: {error}</Text>
+            <Text style={styles.errorText}>Error loading video: {playbackState.error}</Text>
           </View>
         )}
 
-        {!isPlaying && !isLoading && !error && (
+        {!playbackState.isPlaying && !playbackState.isLoading && !playbackState.error && (
           <View style={styles.playButtonContainer}>
             <TouchableOpacity 
               style={styles.playButton} 
@@ -106,7 +70,7 @@ export default function VideoCard({ video }: VideoCardProps) {
           </View>
         )}
 
-        <View style={[styles.overlay, isPlaying ? styles.overlayHidden : null]}>
+        <View style={[styles.overlay, playbackState.isPlaying ? styles.overlayHidden : null]}>
           <View style={styles.metadata}>
             <Text style={styles.title}>{video.title}</Text>
             <Text style={styles.author}>{video.authorName}</Text>

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, FlatList, StyleSheet, Dimensions, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { Video, VideoFeed } from '../../types/video';
-import { fetchVideos, addSampleVideos } from '../../services/firebase';
+import { VideoService } from '../../services/firebase/video';
 import VideoCard from '../../components/VideoCard';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 const { height } = Dimensions.get('window');
 
@@ -13,7 +14,7 @@ export default function Home() {
     loading: true,
     error: undefined,
   });
-  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | null>(null);
 
   useEffect(() => {
     loadVideos();
@@ -24,9 +25,8 @@ export default function Home() {
       if (loadMore && !lastVisible) return;
 
       setFeedState(prev => ({ ...prev, loading: true, error: undefined }));
-      const result = await fetchVideos(loadMore ? lastVisible : undefined);
+      const result = await VideoService.fetchVideos(loadMore && lastVisible ? lastVisible : undefined);
       console.log('Loaded videos:', result.videos.length);
-      console.log('First video details:', result.videos[0]);
       
       setFeedState(prev => ({
         videos: loadMore ? [...prev.videos, ...result.videos] : result.videos,
@@ -46,7 +46,7 @@ export default function Home() {
 
   const handleAddSampleVideos = async () => {
     try {
-      await addSampleVideos();
+      await VideoService.addSampleVideos();
       loadVideos(); // Reload videos after adding samples
     } catch (error) {
       console.error('Error adding sample videos:', error);
