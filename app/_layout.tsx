@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
-import { Stack, Slot } from 'expo-router';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { Stack } from 'expo-router';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter, useSegments } from 'expo-router';
+import { auth } from '../services/firebase';
 
 export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
-  const auth = getAuth();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -22,23 +22,13 @@ export default function RootLayout() {
     });
 
     return () => unsubscribe();
-  }, [auth, segments]);
+  }, [segments]);
 
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="login"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="(app)/home"
-        options={{
-          headerShown: false,
-        }}
-      />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="(app)" options={{ headerShown: false }} />
     </Stack>
   );
 }
