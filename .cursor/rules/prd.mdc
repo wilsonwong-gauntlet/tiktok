@@ -1,0 +1,79 @@
+---
+description: My PRD of the project task
+globs: 
+---
+
+Project Overview: TikTok for Voracious Learners (INTJs)
+Target User:
+Content Consumer (Voracious Learners):
+Specifically tailored for INTJs who value deep, structured learning, self-reflection, and concise, quality insights.
+Project Vision:
+Create an engaging, minimalist video platform where users can easily discover high-quality educational content, track their learning progress, and deepen their understanding through interactive features—all while enjoying a distraction-free UI.
+---
+Key Features & Vertical Slice
+Your vertical slice will include fully functional, end-to-end features that address the user’s learning journey. Here’s how your user stories map to core functionalities:
+
+AI Summary of Video
+User Story: “As a learner, I want to view a concise AI-generated summary of a video so that I can quickly grasp its key points before or after watching it.”
+Implementation:
+Integrate an AI or NLP service to process the video’s transcript or content.
+Save the generated summary alongside the video metadata for quick reference.
+Further Reading (Saved with the Video)
+User Story: “As a learner, I want to have access to curated further reading materials linked with each video so that I can explore topics in depth.”
+Implementation:
+Embed links or content recommendations with each video.
+Allow content curators (or automated systems) to attach additional resources to enhance learning.
+Personalized Learning Feeds
+User Story: “As a voracious learner, I want my feed to be personalized based on my interests and learning progress so that I constantly receive content that challenges and engages me.”
+Implementation:
+Develop recommendation algorithms that adjust based on user interactions, viewing history, and progress.
+Curate feeds dedicated to specific learning tracks (e.g., “Advanced Programming Concepts,” “AI Ethics,” etc.).
+Interactive Quizzes / Reflections
+User Story: “As a learner, I want interactive quizzes and reflection prompts after watching each video so that I can test my understanding and solidify my learning.”
+Implementation:
+Embed interactive quiz modules that appear at the end or during a video.
+Include reflection prompts that encourage critical thinking about the content.
+Progress Metrics / Knowledge Graph
+User Story: “As an INTJ, I want to track my learning progress with metrics and see a visual knowledge graph that maps how topics connect so that I can identify gaps and plan my learning path.”
+Implementation:
+Develop dashboards that display time spent, mastery levels, and other learning metrics.
+Build a knowledge graph to visualize topic interconnections and personalize learning journeys.
+AI Summarized Comment Section
+User Story: “As a learner, I want the comment section to be summarized by AI so I can quickly grasp community insights and key takeaways without sifting through extensive text.”
+Implementation:
+Use AI to aggregate and summarize user comments.
+Present a concise summary alongside (or instead of) a traditional comment feed for quicker consumption.
+---
+Design & Technical Considerations
+Minimalist, Clean UI:
+Emphasize a distraction-free design that caters to INTJs’ preference for focus.
+Implement a “Do Not Disturb” mode to further minimize distractions during deep work sessions.
+End-to-End Feature Implementation:
+For Content Consumption:
+Build the full pipeline: video display with AI summaries and further readings → interactive quiz/reflection session → progress tracking with a knowledge graph.
+AI & Machine Learning Integration:
+Integrate third-party APIs or machine learning frameworks for text summarization (for both video and comments) and personalized content recommendations.
+Consider a modular approach where each AI component can be updated or scaled independently.
+Data Management:
+Structure your data models to robustly manage video metadata, additional reading material, quiz results, user progress, and AI-generated content.
+Ensure smooth synchronization between front-end display and back-end data processing.
+---
+Next Steps
+1. Finalize the Feature List:
+Confirm that these six user stories cumulatively represent a complete vertical slice that demonstrates a full user experience.
+2. Architect the Application:
+Define the data models.
+Identify necessary third-party integrations (e.g., for AI summarization).
+Map out the user flow from video consumption to progress tracking.
+Design UI Components:
+Build a clean, minimalist design that reflects the needs of INTJs.
+Develop wireframes or prototypes that integrate all features seamlessly.
+4. Implement & Test:
+Build each feature to be fully functional.
+Test end-to-end flows (e.g., the personalized feed, interactive quizzes, and AI functionalities) to ensure a cohesive user experience.
+Prepare a Walkthrough:
+Record a demo video showcasing how the app meets the six user stories.
+Highlight how the app serves voracious learners and why it’s especially well-tuned to the INTJ mindset.
+---
+This comprehensive remit sets a clear roadmap for your rapid development week. Focusing on these six end-to-end functionalities will ensure you deliver a robust, niche vertical slice that demonstrates your app's potential to bring a rich educational experience to voracious learners.
+
