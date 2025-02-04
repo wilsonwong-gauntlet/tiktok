@@ -1,5 +1,8 @@
-import { Text, View } from "react-native";
-import { initializeApp } from "firebase/app";
+import { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'expo-router';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -13,17 +16,26 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 export default function Index() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.replace('/(app)/home');
+      } else {
+        router.replace('/login');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+      <ActivityIndicator size="large" color="#FF0050" />
     </View>
   );
 }
