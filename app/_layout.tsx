@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter, useSegments } from 'expo-router';
-import { auth } from '../services/firebase';
+import { auth } from '../services/firebase/index';
 
 export default function RootLayout() {
   const segments = useSegments();

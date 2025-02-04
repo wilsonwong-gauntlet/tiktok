@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   QueryDocumentSnapshot
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from './index';
 import { Video, FurtherReading } from '../../types/video';
 
 const VIDEOS_PER_PAGE = 10;

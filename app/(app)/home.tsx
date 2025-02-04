@@ -26,7 +26,6 @@ export default function Home() {
 
       setFeedState(prev => ({ ...prev, loading: true, error: undefined }));
       const result = await VideoService.fetchVideos(loadMore && lastVisible ? lastVisible : undefined);
-      console.log('Loaded videos:', result.videos.length);
       
       setFeedState(prev => ({
         videos: loadMore ? [...prev.videos, ...result.videos] : result.videos,
@@ -47,21 +46,20 @@ export default function Home() {
   const handleAddSampleVideos = async () => {
     try {
       await VideoService.addSampleVideos();
-      loadVideos(); // Reload videos after adding samples
+      loadVideos();
     } catch (error) {
       console.error('Error adding sample videos:', error);
     }
   };
 
   const renderVideo = ({ item }: { item: Video }) => (
-    <VideoCard video={item} />
+    <VideoCard video={item} isActive={true} />
   );
 
   if (feedState.loading && !feedState.videos.length) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.debugText}>Loading videos...</Text>
       </View>
     );
   }
@@ -83,10 +81,6 @@ export default function Home() {
   if (!feedState.videos.length) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.debugText}>No videos found</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => loadVideos()}>
-          <Text style={styles.retryText}>Refresh</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.retryButton} onPress={handleAddSampleVideos}>
           <Text style={styles.retryText}>Add Sample Videos</Text>
         </TouchableOpacity>
@@ -95,10 +89,7 @@ export default function Home() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.debugText}>Videos loaded: {feedState.videos.length}</Text>
-      </View>
+    <View style={styles.container}>
       <FlatList
         data={feedState.videos}
         renderItem={renderVideo}
@@ -107,6 +98,7 @@ export default function Home() {
         onEndReachedThreshold={0.5}
         snapToInterval={height}
         decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
         viewabilityConfig={{
           itemVisiblePercentThreshold: 50
         }}
@@ -118,7 +110,7 @@ export default function Home() {
           ) : null
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -133,20 +125,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
-  header: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
   errorText: {
     color: '#fff',
     fontSize: 16,
     marginBottom: 20,
-  },
-  debugText: {
-    color: '#fff',
-    fontSize: 14,
-    marginTop: 10,
   },
   footer: {
     padding: 20,

@@ -12,7 +12,9 @@ import {
   doc,
   getDoc,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  setDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { Video } from '../../types/video';
 
@@ -34,14 +36,9 @@ try {
 }
 
 // Initialize Auth with persistence
-let auth;
-try {
-  auth = getAuth(app);
-} catch {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-}
+const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -167,11 +164,73 @@ async function addSampleVideos() {
   }
 }
 
+async function saveVideo(userId: string, videoId: string) {
+  try {
+    const savedRef = doc(db, 'users', userId, 'savedVideos', videoId);
+    await setDoc(savedRef, {
+      savedAt: serverTimestamp(),
+      videoId
+    });
+  } catch (error) {
+    console.error('Error saving video:', error);
+    throw error;
+  }
+}
+
+async function unsaveVideo(userId: string, videoId: string) {
+  try {
+    const savedRef = doc(db, 'users', userId, 'savedVideos', videoId);
+    await deleteDoc(savedRef);
+  } catch (error) {
+    console.error('Error unsaving video:', error);
+    throw error;
+  }
+}
+
+async function fetchSavedVideos(userId: string) {
+  try {
+    const savedVideosRef = collection(db, 'users', userId, 'savedVideos');
+    const savedQuery = query(savedVideosRef, orderBy('savedAt', 'desc'));
+    const snapshot = await getDocs(savedQuery);
+    
+    const savedVideoIds = snapshot.docs.map(doc => doc.data().videoId);
+    
+    // Fetch the actual video documents
+    const videos: Video[] = [];
+    for (const videoId of savedVideoIds) {
+      const video = await fetchVideoById(videoId);
+      if (video) {
+        videos.push(video);
+      }
+    }
+    
+    return videos;
+  } catch (error) {
+    console.error('Error fetching saved videos:', error);
+    throw error;
+  }
+}
+
+async function isVideoSaved(userId: string, videoId: string) {
+  try {
+    const savedRef = doc(db, 'users', userId, 'savedVideos', videoId);
+    const savedDoc = await getDoc(savedRef);
+    return savedDoc.exists();
+  } catch (error) {
+    console.error('Error checking if video is saved:', error);
+    throw error;
+  }
+}
+
 export { 
   app, 
   auth, 
   db,
   fetchVideos,
   fetchVideoById,
-  addSampleVideos
+  addSampleVideos,
+  saveVideo,
+  unsaveVideo,
+  fetchSavedVideos,
+  isVideoSaved
 }; 

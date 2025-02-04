@@ -1,12 +1,33 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../services/firebase';
+import { auth, fetchSavedVideos } from '../../services/firebase/index';
 import { useRouter } from 'expo-router';
+import { Video } from '../../types/video';
 
 export default function Profile() {
   const router = useRouter();
+  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadSavedVideos();
+  }, []);
+
+  const loadSavedVideos = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      setLoading(true);
+      const videos = await fetchSavedVideos(auth.currentUser.uid);
+      setSavedVideos(videos);
+    } catch (error) {
+      console.error('Error loading saved videos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -15,6 +36,13 @@ export default function Profile() {
     } catch (error) {
       console.error('Error signing out:', error);
     }
+  };
+
+  const handleVideoPress = (videoId: string) => {
+    router.push({
+      pathname: "/(app)/home",
+      params: { videoId }
+    });
   };
 
   return (
@@ -37,7 +65,29 @@ export default function Profile() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Saved Videos</Text>
           <View style={styles.savedVideosContainer}>
-            <Text style={styles.text}>No saved videos yet</Text>
+            {loading ? (
+              <Text style={styles.text}>Loading...</Text>
+            ) : savedVideos.length === 0 ? (
+              <Text style={styles.text}>No saved videos yet</Text>
+            ) : (
+              <View style={styles.videoGrid}>
+                {savedVideos.map(video => (
+                  <TouchableOpacity
+                    key={video.id}
+                    style={styles.videoCard}
+                    onPress={() => handleVideoPress(video.id)}
+                  >
+                    <Image
+                      source={{ uri: video.thumbnailUrl }}
+                      style={styles.thumbnail}
+                    />
+                    <Text style={styles.videoTitle} numberOfLines={2}>
+                      {video.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         </View>
 
@@ -83,8 +133,29 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   savedVideosContainer: {
-    alignItems: 'center',
-    padding: 20,
+    padding: 10,
+  },
+  videoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  videoCard: {
+    width: '48%',
+    marginBottom: 15,
+    backgroundColor: '#111',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  thumbnail: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#222',
+  },
+  videoTitle: {
+    color: '#fff',
+    fontSize: 14,
+    padding: 8,
   },
   text: {
     color: '#666',

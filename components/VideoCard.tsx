@@ -1,97 +1,172 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { ResizeMode, Video } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { Ionicons } from '@expo/vector-icons';
 import { Video as VideoType } from '../types/video';
-import { useVideoPlayback } from '../hooks/useVideoPlayback';
+import { auth, saveVideo, unsaveVideo, isVideoSaved } from '../services/firebase/index';
+import { useEvent } from 'expo';
+import VideoInfoModal from './VideoInfoModal';
 
 interface VideoCardProps {
   video: VideoType;
+  isActive: boolean;
 }
 
 const { width, height } = Dimensions.get('window');
 
-export default function VideoCard({ video }: VideoCardProps) {
-  const {
-    videoRef,
-    playbackState,
-    onPlaybackStatusUpdate,
-    togglePlayPause,
-    onLoad,
-    onError,
-  } = useVideoPlayback();
+export default function VideoCard({ video, isActive }: VideoCardProps) {
+  const [saved, setSaved] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<'summary' | 'reading'>('summary');
+  
+  const player = useVideoPlayer(video.url, player => {
+    console.log('Video source:', video.url);
+    player.loop = true;
+  });
+
+  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  useEffect(() => {
+    if (isActive && status === 'readyToPlay' && !isPlaying) {
+      player.play();
+    }
+  }, [isActive, status]);
+
+  useEffect(() => {
+    const checkSavedStatus = async () => {
+      if (auth.currentUser) {
+        const isSaved = await isVideoSaved(auth.currentUser.uid, video.id);
+        setSaved(isSaved);
+      }
+    };
+    checkSavedStatus();
+  }, [video.id]);
+
+  const handleSave = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      if (saved) {
+        await unsaveVideo(auth.currentUser.uid, video.id);
+        setSaved(false);
+      } else {
+        await saveVideo(auth.currentUser.uid, video.id);
+        setSaved(true);
+      }
+    } catch (error) {
+      console.error('Error toggling save:', error);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  };
+
+  const handleShowSummary = () => {
+    setModalType('summary');
+    setModalVisible(true);
+  };
+
+  const handleShowReading = () => {
+    setModalType('reading');
+    setModalVisible(true);
+  };
 
   return (
     <View style={styles.container}>
       <TouchableOpacity 
         style={styles.videoContainer} 
-        onPress={togglePlayPause}
+        onPress={handlePlayPause}
         activeOpacity={0.9}
       >
-        <Video
-          ref={videoRef}
-          source={{ uri: video.url }}
+        <VideoView
           style={styles.video}
-          resizeMode={ResizeMode.COVER}
-          isLooping
-          useNativeControls
-          isMuted={false}
-          volume={1.0}
-          rate={1.0}
-          shouldPlay={false}
-          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          onLoad={onLoad}
-          onError={onError}
-          posterSource={{ uri: video.thumbnailUrl }}
-          usePoster={true}
-          posterStyle={styles.poster}
+          player={player}
         />
         
-        {playbackState.isLoading && (
+        {status === 'loading' && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff" />
           </View>
         )}
 
-        {playbackState.error && (
+        {status === 'error' && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Error loading video: {playbackState.error}</Text>
+            <Text style={styles.errorText}>Error loading video</Text>
           </View>
         )}
 
-        {!playbackState.isPlaying && !playbackState.isLoading && !playbackState.error && (
+        {!isPlaying && status === 'readyToPlay' && (
           <View style={styles.playButtonContainer}>
             <TouchableOpacity 
               style={styles.playButton} 
-              onPress={togglePlayPause}
+              onPress={handlePlayPause}
               activeOpacity={0.7}
             >
               <Text style={styles.playButtonText}>▶️</Text>
             </TouchableOpacity>
           </View>
         )}
+        
+        <View style={styles.overlay}>
+          {/* Right side actions */}
+          <View style={styles.rightActions}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
+              <Ionicons 
+                name={saved ? "bookmark" : "bookmark-outline"} 
+                size={32} 
+                color="#fff" 
+              />
+              <Text style={styles.actionText}>Save</Text>
+            </TouchableOpacity>
+            
+            {video.aiSummary && (
+              <TouchableOpacity style={styles.actionButton} onPress={handleShowSummary}>
+                <Ionicons 
+                  name="document-text-outline" 
+                  size={32} 
+                  color="#fff" 
+                />
+                <Text style={styles.actionText}>AI Summary</Text>
+              </TouchableOpacity>
+            )}
+            
+            {video.furtherReading && video.furtherReading.length > 0 && (
+              <TouchableOpacity style={styles.actionButton} onPress={handleShowReading}>
+                <Ionicons 
+                  name="book-outline" 
+                  size={32} 
+                  color="#fff" 
+                />
+                <Text style={styles.actionText}>Reading</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        <View style={[styles.overlay, playbackState.isPlaying ? styles.overlayHidden : null]}>
-          <View style={styles.metadata}>
+          {/* Bottom metadata */}
+          <View style={styles.bottomMetadata}>
             <Text style={styles.title}>{video.title}</Text>
             <Text style={styles.author}>{video.authorName}</Text>
             <Text style={styles.description} numberOfLines={2}>
               {video.description}
             </Text>
           </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.actionText}>AI Summary</Text>
-            </TouchableOpacity>
-            
-            {video.furtherReading && video.furtherReading.length > 0 && (
-              <TouchableOpacity style={styles.actionButton}>
-                <Text style={styles.actionText}>Further Reading</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
       </TouchableOpacity>
+
+      <VideoInfoModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title={video.title}
+        aiSummary={video.aiSummary}
+        furtherReading={video.furtherReading}
+        type={modalType}
+      />
     </View>
   );
 }
@@ -99,7 +174,7 @@ export default function VideoCard({ video }: VideoCardProps) {
 const styles = StyleSheet.create({
   container: {
     width,
-    height,
+    height: height,
     backgroundColor: '#000',
   },
   videoContainer: {
@@ -107,17 +182,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   video: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#000',
-    zIndex: 1,
-  },
-  poster: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
   },
   loadingContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -158,47 +228,49 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    flexDirection: 'row',
     zIndex: 4,
   },
-  overlayHidden: {
-    opacity: 0,
-  },
-  metadata: {
-    marginBottom: 20,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  author: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  description: {
-    color: '#fff',
-    fontSize: 14,
-    opacity: 0.8,
-  },
-  actions: {
-    flexDirection: 'row',
-    marginBottom: 20,
+  rightActions: {
+    position: 'absolute',
+    right: 8,
+    bottom: 100,
+    alignItems: 'center',
+    gap: 20,
   },
   actionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionText: {
     color: '#fff',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  bottomMetadata: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 16,
+    paddingRight: 80, // Make space for right actions
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  title: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  author: {
+    color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    marginBottom: 4,
+  },
+  description: {
+    color: '#fff',
+    fontSize: 13,
+    opacity: 0.9,
   },
 }); 
