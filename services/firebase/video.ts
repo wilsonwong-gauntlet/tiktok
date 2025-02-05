@@ -11,7 +11,8 @@ import {
   serverTimestamp,
   QueryDocumentSnapshot,
   updateDoc,
-  where
+  where,
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
@@ -94,6 +95,21 @@ export class VideoService {
           category: 'Technology',
           tags: ['machine learning', 'AI', 'technology'],
           aiSummary: 'This video covers the basics of machine learning, including supervised and unsupervised learning.',
+          searchableText: [
+            'introduction',
+            'machine',
+            'learning',
+            'comprehensive',
+            'overview',
+            'concepts',
+            'applications',
+            'technology',
+            'ai',
+            'artificial',
+            'intelligence',
+            'supervised',
+            'unsupervised'
+          ],
           furtherReading: [
             {
               title: 'Machine Learning Guide',
@@ -145,6 +161,19 @@ export class VideoService {
           category: 'Physics',
           tags: ['quantum computing', 'physics', 'technology'],
           aiSummary: 'An exploration of quantum computing fundamentals and their potential impact.',
+          searchableText: [
+            'understanding',
+            'quantum',
+            'computing',
+            'deep',
+            'dive',
+            'principles',
+            'applications',
+            'physics',
+            'technology',
+            'fundamentals',
+            'impact'
+          ],
           furtherReading: [
             {
               title: 'Quantum Computing Basics',
@@ -317,6 +346,21 @@ export class VideoService {
       return Array.from(tags).sort();
     } catch (error) {
       console.error('Error getting tags:', error);
+      throw error;
+    }
+  }
+
+  static async clearVideos() {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const snapshot = await getDocs(videosRef);
+      
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      console.log('Cleared all videos successfully');
+    } catch (error) {
+      console.error('Error clearing videos:', error);
       throw error;
     }
   }
