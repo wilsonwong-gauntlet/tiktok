@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from
 import { Ionicons } from '@expo/vector-icons';
 import { LearningConcept, RetentionPrompt } from '../types/video';
 import { auth } from '../services/firebase/index';
-import { getConceptProgress, getDueReviews, initializeSampleData } from '../services/firebase/learning';
+import { getConceptProgress, getDueReviews, initializeSampleData, getConcept } from '../services/firebase/learning';
 
 interface ConceptProgress {
   concept: LearningConcept;
@@ -50,21 +50,34 @@ export default function LearningDashboard({ onConceptSelect }: LearningDashboard
     
     try {
       const progress = await getConceptProgress(auth.currentUser.uid);
+      console.log('Raw progress data:', progress);
+
       // Transform LearningProgress into ConceptProgress format
-      const transformedProgress: ConceptProgress[] = progress.map(p => ({
-        concept: {
-          id: p.conceptId,
-          name: p.conceptId, // TODO: Fetch concept details from a separate call
-          description: '',
-          prerequisites: [],
-          retentionPrompts: [],
-          transferTasks: [],
-        },
-        mastery: p.mastery,
-        nextReview: p.nextReview,
-        retentionStreak: p.retentionStreak,
-      }));
-      setConceptProgress(transformedProgress);
+      const transformedProgress: ConceptProgress[] = await Promise.all(
+        progress.map(async p => {
+          // Fetch the full concept details
+          const conceptDetails = await getConcept(p.conceptId);
+          console.log('Fetched concept details:', conceptDetails);
+          
+          if (!conceptDetails) {
+            console.error('Failed to fetch concept details for:', p.conceptId);
+            return null;
+          }
+
+          return {
+            concept: conceptDetails,
+            mastery: p.mastery,
+            nextReview: p.nextReview,
+            retentionStreak: p.retentionStreak,
+          };
+        })
+      );
+
+      // Filter out any null values from failed concept fetches
+      const validProgress = transformedProgress.filter((p): p is ConceptProgress => p !== null);
+      console.log('Transformed progress:', validProgress);
+      
+      setConceptProgress(validProgress);
     } catch (error) {
       console.error('Error loading progress:', error);
       throw error;
@@ -149,29 +162,38 @@ export default function LearningDashboard({ onConceptSelect }: LearningDashboard
     </View>
   );
 
-  const renderConceptProgress = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Concept Mastery</Text>
-      {conceptProgress.map((progress, index) => (
-        <TouchableOpacity 
-          key={index}
-          style={styles.conceptItem}
-          onPress={() => onConceptSelect(progress.concept)}
-        >
-          <Text style={styles.conceptName}>{progress.concept.name}</Text>
-          {renderMasteryBar(progress.mastery)}
-          {progress.nextReview && (
-            <Text style={styles.nextReview}>
-              Next review: {progress.nextReview.toLocaleDateString()}
-            </Text>
-          )}
-          <Text style={styles.streak}>
-            Streak: {progress.retentionStreak} 🔥
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  const renderConceptProgress = () => {
+    console.log('Rendering concepts:', conceptProgress);
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Concept Mastery</Text>
+        {conceptProgress.map((progress, index) => {
+          console.log('Rendering concept:', progress.concept);
+          return (
+            <TouchableOpacity 
+              key={index}
+              style={styles.conceptItem}
+              onPress={() => {
+                console.log('Concept clicked:', progress.concept);
+                onConceptSelect(progress.concept);
+              }}
+            >
+              <Text style={styles.conceptName}>{progress.concept.name}</Text>
+              {renderMasteryBar(progress.mastery)}
+              {progress.nextReview && (
+                <Text style={styles.nextReview}>
+                  Next review: {progress.nextReview.toLocaleDateString()}
+                </Text>
+              )}
+              <Text style={styles.streak}>
+                Streak: {progress.retentionStreak} 🔥
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>

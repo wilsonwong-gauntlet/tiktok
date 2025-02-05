@@ -356,4 +356,20 @@ export async function initializeSampleData(userId: string): Promise<void> {
     console.error('Error initializing sample data:', error);
     throw error;
   }
+}
+
+export async function getConcept(conceptId: string): Promise<LearningConcept | null> {
+  try {
+    const conceptRef = doc(db, 'concepts', conceptId);
+    const conceptDoc = await getDoc(conceptRef);
+    
+    if (!conceptDoc.exists()) {
+      return null;
+    }
+
+    return conceptDoc.data() as LearningConcept;
+  } catch (error) {
+    console.error('Error getting concept:', error);
+    throw error;
+  }
 } 

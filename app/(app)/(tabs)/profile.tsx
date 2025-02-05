@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../services/firebase/index';
+import { auth } from '../../../services/firebase/index';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { fetchSavedVideos } from '../../services/firebase/index';
-import { Video } from '../../types/video';
-import LearningDashboard from '../../components/LearningDashboard';
+import { fetchSavedVideos } from '../../../services/firebase/index';
+import { Video, LearningConcept } from '../../../types/video';
+import LearningDashboard from '../../../components/LearningDashboard';
 
 export default function Profile() {
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
@@ -41,15 +41,16 @@ export default function Profile() {
   };
 
   const handleVideoPress = (videoId: string) => {
-    router.push({
-      pathname: "/(app)/home",
-      params: { videoId }
-    });
+    router.replace('/(app)/(tabs)');
   };
 
-  const handleConceptSelect = (concept: any) => {
-    // TODO: Navigate to concept detail view
-    console.log('Selected concept:', concept);
+  const handleConceptSelect = (concept: LearningConcept) => {
+    console.log('Profile: Selecting concept:', concept);
+    if (!concept || !concept.id) {
+      console.error('Invalid concept data:', concept);
+      return;
+    }
+    router.push(`/(app)/concept/${concept.id}`);
   };
 
   if (!auth.currentUser) {

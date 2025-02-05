@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, FlatList, StyleSheet, Dimensions, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import { Video, VideoFeed } from '../../types/video';
-import { VideoService } from '../../services/firebase/video';
-import VideoCard from '../../components/VideoCard';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, FlatList, StyleSheet, Dimensions, ActivityIndicator, Text, TouchableOpacity, ViewToken } from 'react-native';
+import { Video, VideoFeed } from '../../../types/video';
+import { VideoService } from '../../../services/firebase/video';
+import VideoCard from '../../../components/VideoCard';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -65,8 +65,13 @@ export default function Home() {
     }
   };
 
-  const onViewableItemsChanged = React.useCallback(({ viewableItems }) => {
-    if (viewableItems.length > 0) {
+  const onViewableItemsChanged = React.useCallback(({ 
+    viewableItems 
+  }: {
+    viewableItems: ViewToken[];
+    changed: ViewToken[];
+  }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
       setCurrentIndex(viewableItems[0].index);
     }
   }, []);

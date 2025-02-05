@@ -15,7 +15,7 @@ export default function RootLayout() {
       
       if (user && !inAuthGroup) {
         // Redirect authenticated users to the home screen
-        router.replace('/(app)/home');
+        router.replace('/(app)/(tabs)');
       } else if (!user && inAuthGroup) {
         // Redirect unauthenticated users to the login screen
         router.replace('/login');
