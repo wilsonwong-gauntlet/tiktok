@@ -6,6 +6,7 @@ import { Video as VideoType } from '../types/video';
 import { auth, saveVideo, unsaveVideo, isVideoSaved } from '../services/firebase/index';
 import { useEvent } from 'expo';
 import LearningPanel from './LearningPanel';
+import CommentSection from './CommentSection';
 import { useVideoSave } from '../contexts/VideoSaveContext';
 
 interface VideoCardProps {
@@ -20,6 +21,7 @@ const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 export default function VideoCard({ video, isActive }: VideoCardProps) {
   const [saved, setSaved] = useState(false);
   const [learningPanelVisible, setLearningPanelVisible] = useState(false);
+  const [commentSectionVisible, setCommentSectionVisible] = useState(false);
   const { notifyVideoSaveChanged } = useVideoSave();
   
   const player = useVideoPlayer(video.url, player => {
@@ -76,6 +78,10 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
     setLearningPanelVisible(true);
   };
 
+  const handleCommentsPress = () => {
+    setCommentSectionVisible(true);
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity 
@@ -115,6 +121,15 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
               <Text style={styles.actionText}>Save</Text>
             </TouchableOpacity>
             
+            <TouchableOpacity style={styles.actionButton} onPress={handleCommentsPress}>
+              <Ionicons 
+                name="chatbubble-outline" 
+                size={32} 
+                color="#fff" 
+              />
+              <Text style={styles.actionText}>Comments</Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity style={styles.actionButton} onPress={handleLearn}>
               <Ionicons 
                 name="school-outline" 
@@ -143,6 +158,12 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
         aiSummary={video.aiSummary}
         furtherReading={video.furtherReading}
         quiz={video.quiz}
+      />
+
+      <CommentSection
+        visible={commentSectionVisible}
+        onClose={() => setCommentSectionVisible(false)}
+        videoId={video.id}
       />
     </View>
   );

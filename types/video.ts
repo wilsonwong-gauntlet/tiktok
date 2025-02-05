@@ -131,4 +131,15 @@ export interface LearningConcept {
   prerequisites: string[];
   retentionPrompts: RetentionPrompt[];
   transferTasks: TransferTask[];
+}
+
+export interface Comment {
+  id: string;
+  videoId: string;
+  userId: string;
+  userName: string;
+  content: string;
+  createdAt: Date;
+  likes: number;
+  replies?: Comment[];
 } 
