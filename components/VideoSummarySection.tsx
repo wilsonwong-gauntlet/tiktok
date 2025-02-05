@@ -1,18 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { VideoSummary } from '../types/video';
+import { Ionicons } from '@expo/vector-icons';
 
 interface VideoSummarySectionProps {
   summary?: VideoSummary;
   isLoading: boolean;
   onGenerateSummary: () => void;
+  transcription?: string;
+  transcriptionStatus?: 'pending' | 'completed' | 'error';
 }
 
 export default function VideoSummarySection({ 
   summary, 
   isLoading,
-  onGenerateSummary 
+  onGenerateSummary,
+  transcription,
+  transcriptionStatus
 }: VideoSummarySectionProps) {
+  const [showTranscription, setShowTranscription] = useState(false);
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -33,8 +40,31 @@ export default function VideoSummarySection({
     );
   }
 
+  const renderTranscriptionStatus = () => {
+    switch (transcriptionStatus) {
+      case 'pending':
+        return (
+          <View style={styles.transcriptionStatus}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.statusText}>Transcribing video...</Text>
+          </View>
+        );
+      case 'error':
+        return (
+          <View style={styles.transcriptionStatus}>
+            <Ionicons name="alert-circle" size={20} color="#ff4444" />
+            <Text style={[styles.statusText, { color: '#ff4444' }]}>
+              Failed to transcribe video
+            </Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Key Points</Text>
         {summary.key_points.map((point: string, index: number) => (
@@ -55,7 +85,29 @@ export default function VideoSummarySection({
           ))}
         </View>
       </View>
-    </View>
+
+      <View style={styles.section}>
+        <TouchableOpacity 
+          style={styles.transcriptionHeader}
+          onPress={() => setShowTranscription(!showTranscription)}
+        >
+          <Text style={styles.sectionTitle}>Transcription</Text>
+          <Ionicons 
+            name={showTranscription ? "chevron-up" : "chevron-down"} 
+            size={24} 
+            color="#fff" 
+          />
+        </TouchableOpacity>
+        
+        {renderTranscriptionStatus()}
+        
+        {showTranscription && transcription && (
+          <View style={styles.transcriptionContent}>
+            <Text style={styles.transcriptionText}>{transcription}</Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -132,5 +184,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  transcriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  transcriptionContent: {
+    backgroundColor: '#222',
+    padding: 15,
+    borderRadius: 8,
+  },
+  transcriptionText: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  transcriptionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 14,
   },
 }); 

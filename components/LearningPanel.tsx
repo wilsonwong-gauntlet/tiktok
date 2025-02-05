@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FurtherReading, VideoSummary } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
@@ -13,11 +13,14 @@ interface LearningPanelProps {
   onClose: () => void;
   title: string;
   videoId: string;
+  aiSummary?: string;
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
+  transcription?: string;
+  transcriptionStatus?: 'pending' | 'completed' | 'error';
 }
 
-type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition';
+type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition' | 'transcription';
 
 const REFLECTION_TEMPLATE = {
   understanding: [
@@ -47,8 +50,11 @@ export default function LearningPanel({
   onClose,
   title,
   videoId,
+  aiSummary,
   furtherReading,
   quiz,
+  transcription,
+  transcriptionStatus,
 }: LearningPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [notes, setNotes] = useState('');
@@ -188,6 +194,41 @@ export default function LearningPanel({
     </TouchableOpacity>
   );
 
+  const renderTranscriptionContent = () => {
+    switch (transcriptionStatus) {
+      case 'pending':
+        return (
+          <View style={styles.transcriptionLoading}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.transcriptionLoadingText}>Transcribing video...</Text>
+          </View>
+        );
+      case 'error':
+        return (
+          <View style={styles.transcriptionError}>
+            <Ionicons name="alert-circle" size={32} color="#ff4444" />
+            <Text style={styles.transcriptionErrorText}>Failed to transcribe video</Text>
+          </View>
+        );
+      case 'completed':
+        return transcription ? (
+          <ScrollView style={styles.transcriptionContent}>
+            <Text style={styles.transcriptionText}>{transcription}</Text>
+          </ScrollView>
+        ) : (
+          <View style={styles.transcriptionEmpty}>
+            <Text style={styles.transcriptionEmptyText}>No transcription available</Text>
+          </View>
+        );
+      default:
+        return (
+          <View style={styles.transcriptionEmpty}>
+            <Text style={styles.transcriptionEmptyText}>No transcription available</Text>
+          </View>
+        );
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
@@ -200,6 +241,8 @@ export default function LearningPanel({
             />
           </ScrollView>
         );
+      case 'transcription':
+        return renderTranscriptionContent();
       case 'notes':
         return renderNotesContent();
       case 'quiz':
@@ -471,6 +514,7 @@ export default function LearningPanel({
 
           <View style={styles.tabs}>
             {renderTab('summary', 'Summary', 'document-text-outline')}
+            {renderTab('transcription', 'Transcript', 'text-outline')}
             {renderTab('notes', 'Notes', 'pencil-outline')}
             {renderTab('quiz', 'Quiz', 'school-outline')}
             {renderTab('reading', 'Reading', 'book-outline')}
@@ -707,5 +751,46 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginTop: 10,
+  },
+  transcriptionContent: {
+    flex: 1,
+    padding: 15,
+  },
+  transcriptionText: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  transcriptionLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionLoadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  transcriptionError: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionErrorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  transcriptionEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionEmptyText: {
+    color: '#666',
+    fontSize: 16,
   },
 }); 

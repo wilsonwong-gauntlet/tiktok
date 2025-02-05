@@ -160,6 +160,8 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
         aiSummary={video.aiSummary}
         furtherReading={video.furtherReading}
         quiz={video.quiz}
+        transcription={video.transcription}
+        transcriptionStatus={video.transcriptionStatus}
       />
 
       <CommentSection

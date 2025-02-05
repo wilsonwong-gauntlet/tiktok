@@ -41,6 +41,7 @@ export interface VideoSummary {
   key_points: string[];
   main_concepts: string[];
   generated_at: Date;
+  transcription?: string;  // Add transcription to summary
 }
 
 export interface Video {
