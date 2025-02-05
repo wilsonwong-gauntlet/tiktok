@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   ViewToken,
   Platform,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SUBJECT_DATA, MainSubject } from '../../../types/subject';
@@ -18,6 +20,8 @@ import { VideoService } from '../../../services/firebase/video';
 import VideoCard from '../../../components/VideoCard';
 import { Ionicons } from '@expo/vector-icons';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
+import { auth } from '../../../services/firebase/index';
+import { useVideoSave } from '../../../contexts/VideoSaveContext';
 
 const { width, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Bottom tab bar
@@ -27,13 +31,14 @@ const BOTTOM_SPACE = Platform.OS === 'ios' ? 34 : 0; // Home indicator height on
 const TOP_SPACE = Platform.OS === 'ios' ? 47 : 0; // Status bar height on iOS
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT - TOP_TAB_HEIGHT - HEADER_HEIGHT - BOTTOM_SPACE - TOP_SPACE;
 
-type Tab = 'overview' | 'learn' | 'progress' | 'practice';
+type Tab = 'home' | 'videos' | 'practice';
 
 export default function SubjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const subject = SUBJECT_DATA[id as MainSubject];
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('home');
   const insets = useSafeAreaInsets();
+  const { savedVideoIds } = useVideoSave();
   
   // Calculate available height for video
   const videoHeight = useMemo(() => {
@@ -48,16 +53,47 @@ export default function SubjectDetail() {
   
   // Video feed state
   const [videos, setVideos] = useState<Video[]>([]);
+  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSaved, setLoadingSaved] = useState(true);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | undefined>(undefined);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [error, setError] = useState<string | undefined>();
 
+  // Load saved videos when tab changes or savedVideoIds updates
   useEffect(() => {
-    if (activeTab === 'learn') {
+    if (activeTab === 'home') {
+      loadSavedVideos();
+    }
+  }, [activeTab, savedVideoIds]);
+
+  // Load videos for video feed
+  useEffect(() => {
+    if (activeTab === 'videos') {
       loadVideos();
     }
   }, [activeTab]);
+
+  const loadSavedVideos = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      setLoadingSaved(true);
+      const result = await VideoService.searchVideos(
+        '',
+        { category: subject.name },
+        { field: 'createdAt', direction: 'desc' }
+      );
+      
+      // Filter videos that are in savedVideoIds
+      const savedOnes = result.videos.filter(video => savedVideoIds.includes(video.id));
+      setSavedVideos(savedOnes);
+    } catch (error) {
+      console.error('Error loading saved videos:', error);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
 
   const loadVideos = async (loadMore = false) => {
     try {
@@ -98,10 +134,26 @@ export default function SubjectDetail() {
     itemVisiblePercentThreshold: 50
   };
 
-  const renderOverviewContent = () => (
-    <View style={styles.overviewSection}>
+  const renderSavedVideoItem = ({ item }: { item: Video }) => (
+    <TouchableOpacity 
+      style={styles.savedVideoItem}
+      onPress={() => setActiveTab('videos')}
+    >
+      <Image 
+        source={{ uri: item.thumbnailUrl }} 
+        style={styles.thumbnail}
+        resizeMode="cover"
+      />
+      <View style={styles.videoInfo}>
+        <Text style={styles.videoTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.videoAuthor}>{item.authorName}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderHomeContent = () => (
+    <ScrollView style={styles.homeSection}>
       <Text style={styles.description}>{subject.description}</Text>
-      <Text style={styles.courseCount}>{subject.courseCount} courses</Text>
       
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
@@ -110,21 +162,53 @@ export default function SubjectDetail() {
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Quizzes Completed</Text>
+          <Text style={styles.statLabel}>Hours Watched</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>0%</Text>
-          <Text style={styles.statLabel}>Overall Progress</Text>
+          <Text style={styles.statLabel}>Quiz Score</Text>
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={styles.startLearningButton}
-        onPress={() => setActiveTab('learn')}
-      >
-        <Text style={styles.startLearningText}>Start Learning</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Continue Watching</Text>
+        <View style={styles.continueWatchingEmpty}>
+          <Text style={styles.emptyText}>No videos in progress</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Saved Videos</Text>
+        {loadingSaved ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color="#fff" />
+          </View>
+        ) : savedVideos.length > 0 ? (
+          <FlatList
+            data={savedVideos}
+            renderItem={renderSavedVideoItem}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.savedVideosContainer}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No saved videos yet</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Recently Added</Text>
+        <TouchableOpacity 
+          style={styles.startButton}
+          onPress={() => setActiveTab('videos')}
+        >
+          <Text style={styles.startButtonText}>Browse All Videos</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 
   const renderLearnContent = () => {
@@ -202,12 +286,6 @@ export default function SubjectDetail() {
     );
   };
 
-  const renderProgressContent = () => (
-    <View style={styles.comingSoonContainer}>
-      <Text style={styles.comingSoonText}>Progress tracking coming soon!</Text>
-    </View>
-  );
-
   const renderPracticeContent = () => (
     <View style={styles.comingSoonContainer}>
       <Text style={styles.comingSoonText}>Quizzes coming soon!</Text>
@@ -216,12 +294,10 @@ export default function SubjectDetail() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'overview':
-        return renderOverviewContent();
-      case 'learn':
+      case 'home':
+        return renderHomeContent();
+      case 'videos':
         return renderLearnContent();
-      case 'progress':
-        return renderProgressContent();
       case 'practice':
         return renderPracticeContent();
     }
@@ -277,27 +353,19 @@ export default function SubjectDetail() {
       <View style={styles.content}>
         <View style={styles.tabs}>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'overview' && styles.activeTab]}
-            onPress={() => setActiveTab('overview')}
+            style={[styles.tab, activeTab === 'home' && styles.activeTab]}
+            onPress={() => setActiveTab('home')}
           >
-            <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>
-              Overview
+            <Text style={[styles.tabText, activeTab === 'home' && styles.activeTabText]}>
+              Home
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'learn' && styles.activeTab]}
-            onPress={() => setActiveTab('learn')}
+            style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
+            onPress={() => setActiveTab('videos')}
           >
-            <Text style={[styles.tabText, activeTab === 'learn' && styles.activeTabText]}>
-              Learn
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'progress' && styles.activeTab]}
-            onPress={() => setActiveTab('progress')}
-          >
-            <Text style={[styles.tabText, activeTab === 'progress' && styles.activeTabText]}>
-              Progress
+            <Text style={[styles.tabText, activeTab === 'videos' && styles.activeTabText]}>
+              Videos
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -305,7 +373,7 @@ export default function SubjectDetail() {
             onPress={() => setActiveTab('practice')}
           >
             <Text style={[styles.tabText, activeTab === 'practice' && styles.activeTabText]}>
-              Practice
+              Quiz
             </Text>
           </TouchableOpacity>
         </View>
@@ -350,19 +418,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  overviewSection: {
+  homeSection: {
     padding: 20,
   },
   description: {
     fontSize: 16,
     color: '#fff',
     marginBottom: 10,
-  },
-  courseCount: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.8,
-    marginBottom: 20,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -382,16 +444,37 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
   },
-  startLearningButton: {
-    backgroundColor: '#333',
+  section: {
+    marginTop: 32,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  continueWatchingEmpty: {
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 100,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  startButton: {
+    backgroundColor: '#222',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  startLearningText: {
+  startButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   centerContainer: {
     flex: 1,
@@ -451,5 +534,45 @@ const styles = StyleSheet.create({
   comingSoonText: {
     color: '#666',
     fontSize: 16,
+  },
+  savedVideosContainer: {
+    paddingHorizontal: 0,
+  },
+  savedVideoItem: {
+    width: 200,
+    marginRight: 12,
+    borderRadius: 12,
+    backgroundColor: '#111',
+    overflow: 'hidden',
+  },
+  thumbnail: {
+    width: '100%',
+    height: 112,
+    backgroundColor: '#222',
+  },
+  videoInfo: {
+    padding: 12,
+  },
+  videoTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  videoAuthor: {
+    color: '#666',
+    fontSize: 12,
+  },
+  loadingContainer: {
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    height: 100,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 

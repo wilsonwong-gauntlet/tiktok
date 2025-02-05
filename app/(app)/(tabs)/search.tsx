@@ -1,40 +1,31 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SUBJECT_DATA, Subject } from '../../../types/subject';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COLUMN_COUNT = 2;
 const GRID_PADDING = 16;
 const GRID_SPACING = 12;
-const CARD_WIDTH = (SCREEN_WIDTH - (GRID_PADDING * 2) - (GRID_SPACING * (COLUMN_COUNT - 1))) / COLUMN_COUNT;
+const CARD_WIDTH = (SCREEN_WIDTH - (GRID_PADDING * 2) - GRID_SPACING) / 2;
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState('');
   const subjects = Object.values(SUBJECT_DATA);
   const filteredSubjects = subjects.filter(subject => 
     subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    subject.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    subject.topics.some(topic => topic.toLowerCase().includes(searchQuery.toLowerCase()))
+    subject.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const renderSubjectCard = ({ item }: { item: Subject }) => (
     <TouchableOpacity 
-      style={[styles.subjectCard, { backgroundColor: item.color }]}
+      style={styles.subjectCard}
       onPress={() => router.push(`/(app)/subject/${item.id}`)}
     >
-      <View style={styles.cardContent}>
+      <View style={[styles.cardContent, { backgroundColor: item.color + '22' }]}>
         <Text style={styles.subjectName}>{item.name}</Text>
-        <Text style={styles.courseCount}>{item.courseCount} courses</Text>
-        <View style={styles.topicsContainer}>
-          {item.topics.slice(0, 3).map((topic, index) => (
-            <Text key={index} style={styles.topicText} numberOfLines={1}>
-              • {topic}
-            </Text>
-          ))}
-        </View>
+        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -66,7 +57,7 @@ export default function Search() {
         data={filteredSubjects}
         renderItem={renderSubjectCard}
         keyExtractor={(item) => item.id}
-        numColumns={COLUMN_COUNT}
+        numColumns={2}
         contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
@@ -96,7 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
     backgroundColor: '#111',
-    borderRadius: 10,
+    borderRadius: 12,
   },
   searchIcon: {
     marginRight: 10,
@@ -111,53 +102,28 @@ const styles = StyleSheet.create({
   },
   grid: {
     padding: GRID_PADDING,
-    gap: GRID_SPACING,
   },
   subjectCard: {
     width: CARD_WIDTH,
-    aspectRatio: 0.8,
-    borderRadius: 16,
     marginBottom: GRID_SPACING,
-    marginRight: GRID_SPACING,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    marginRight: (SCREEN_WIDTH - (CARD_WIDTH * 2) - (GRID_PADDING * 2)) / 2,
   },
   cardContent: {
-    flex: 1,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
+    height: 140,
     justifyContent: 'space-between',
   },
   subjectName: {
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
   },
-  courseCount: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  description: {
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
-    marginBottom: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  topicsContainer: {
-    marginTop: 'auto',
-  },
-  topicText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
-    marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    lineHeight: 20,
   },
   emptyContainer: {
     flex: 1,
