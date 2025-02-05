@@ -10,7 +10,8 @@ import {
   addDoc,
   serverTimestamp,
   QueryDocumentSnapshot,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
@@ -213,6 +214,109 @@ export class VideoService {
       return mockSummary;
     } catch (error) {
       console.error('Error generating video summary:', error);
+      throw error;
+    }
+  }
+
+  static async searchVideos(
+    searchText: string,
+    filters: {
+      category?: string;
+      tags?: string[];
+    },
+    sort: {
+      field: 'createdAt' | 'viewCount';
+      direction: 'asc' | 'desc';
+    } = { field: 'createdAt', direction: 'desc' },
+    lastVisible?: QueryDocumentSnapshot<any>
+  ) {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const queryConstraints: any[] = [];
+
+      // Add text search conditions
+      if (searchText) {
+        const lowercaseQuery = searchText.toLowerCase();
+        queryConstraints.push(
+          where('searchableText', 'array-contains', lowercaseQuery)
+        );
+      }
+
+      // Add category filter
+      if (filters.category) {
+        queryConstraints.push(where('category', '==', filters.category));
+      }
+
+      // Add tags filter
+      if (filters.tags && filters.tags.length > 0) {
+        queryConstraints.push(where('tags', 'array-contains-any', filters.tags));
+      }
+
+      // Add sorting
+      queryConstraints.push(orderBy(sort.field, sort.direction));
+
+      // Add pagination
+      if (lastVisible) {
+        queryConstraints.push(startAfter(lastVisible));
+      }
+      queryConstraints.push(limit(VIDEOS_PER_PAGE));
+
+      const videoQuery = query(videosRef, ...queryConstraints);
+      const snapshot = await getDocs(videoQuery);
+      const lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
+
+      const videos = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate()
+      })) as Video[];
+
+      return {
+        videos,
+        lastVisible: lastVisibleDoc
+      };
+    } catch (error) {
+      console.error('Error searching videos:', error);
+      throw error;
+    }
+  }
+
+  static async getCategories(): Promise<string[]> {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const snapshot = await getDocs(videosRef);
+      const categories = new Set<string>();
+      
+      snapshot.docs.forEach(doc => {
+        const category = doc.data().category;
+        if (category) {
+          categories.add(category);
+        }
+      });
+
+      return Array.from(categories).sort();
+    } catch (error) {
+      console.error('Error getting categories:', error);
+      throw error;
+    }
+  }
+
+  static async getTags(): Promise<string[]> {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const snapshot = await getDocs(videosRef);
+      const tags = new Set<string>();
+      
+      snapshot.docs.forEach(doc => {
+        const videoTags = doc.data().tags;
+        if (Array.isArray(videoTags)) {
+          videoTags.forEach(tag => tags.add(tag));
+        }
+      });
+
+      return Array.from(tags).sort();
+    } catch (error) {
+      console.error('Error getting tags:', error);
       throw error;
     }
   }
