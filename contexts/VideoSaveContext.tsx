@@ -1,7 +1,10 @@
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useRef } from 'react';
+
+type VideoSaveCallback = (videoId: string) => void;
 
 interface VideoSaveContextType {
   notifyVideoSaveChanged: (videoId: string) => void;
+  subscribe: (callback: VideoSaveCallback) => () => void;
 }
 
 const VideoSaveContext = createContext<VideoSaveContextType | null>(null);
@@ -15,14 +18,21 @@ export function useVideoSave() {
 }
 
 export function VideoSaveProvider({ children }: { children: React.ReactNode }) {
+  const subscribers = useRef<Set<VideoSaveCallback>>(new Set());
+
+  const subscribe = useCallback((callback: VideoSaveCallback) => {
+    subscribers.current.add(callback);
+    return () => {
+      subscribers.current.delete(callback);
+    };
+  }, []);
+
   const notifyVideoSaveChanged = useCallback((videoId: string) => {
-    // This will be used to trigger a refresh of components that care about saved state
-    // The implementation is simple - components will listen to this context
-    // and refresh their state when notified
+    subscribers.current.forEach(callback => callback(videoId));
   }, []);
 
   return (
-    <VideoSaveContext.Provider value={{ notifyVideoSaveChanged }}>
+    <VideoSaveContext.Provider value={{ notifyVideoSaveChanged, subscribe }}>
       {children}
     </VideoSaveContext.Provider>
   );

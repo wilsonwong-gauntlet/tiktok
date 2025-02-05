@@ -8,10 +8,20 @@ import { signOut } from 'firebase/auth';
 import { fetchSavedVideos } from '../../../services/firebase/index';
 import { Video, LearningConcept } from '../../../types/video';
 import LearningDashboard from '../../../components/LearningDashboard';
+import { useVideoSave } from '../../../contexts/VideoSaveContext';
 
 export default function Profile() {
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const { subscribe } = useVideoSave();
+
+  // Listen for video save changes
+  useEffect(() => {
+    const unsubscribe = subscribe((videoId) => {
+      loadSavedVideos();
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     loadSavedVideos();
@@ -41,7 +51,10 @@ export default function Profile() {
   };
 
   const handleVideoPress = (videoId: string) => {
-    router.replace('/(app)/(tabs)');
+    router.push({
+      pathname: "/(app)/(tabs)",
+      params: { videoId }
+    });
   };
 
   const handleConceptSelect = (concept: LearningConcept) => {
