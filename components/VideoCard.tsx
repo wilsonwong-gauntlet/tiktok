@@ -35,8 +35,10 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
   useEffect(() => {
     if (isActive && status === 'readyToPlay' && !isPlaying) {
       player.play();
+    } else if (!isActive && isPlaying) {
+      player.pause();
     }
-  }, [isActive, status]);
+  }, [isActive, status, isPlaying]);
 
   useEffect(() => {
     const checkSavedStatus = async () => {

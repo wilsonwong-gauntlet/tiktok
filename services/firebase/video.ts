@@ -387,15 +387,24 @@ export class VideoService {
       const thumbnailFileName = `thumbnails/${Date.now()}-${videoData.thumbnailPath.split('/').pop()}`;
       const thumbnailRef = ref(storage, thumbnailFileName);
 
-      // Read and upload the video file
+      // Read and upload the video file with proper content type
       const videoResponse = await fetch(`file://${videoData.filePath}`);
       const videoBlob = await videoResponse.blob();
-      await uploadBytes(videoRef, videoBlob);
+      const videoExtension = videoData.filePath.split('.').pop()?.toLowerCase();
+      const videoContentType = videoExtension === 'webm' ? 'video/webm' : 
+                              videoExtension === 'mp4' ? 'video/mp4' : 
+                              'video/mp4'; // default to mp4 if unknown
+
+      await uploadBytes(videoRef, videoBlob, {
+        contentType: videoContentType
+      });
 
       // Read and upload the thumbnail
       const thumbnailResponse = await fetch(`file://${videoData.thumbnailPath}`);
       const thumbnailBlob = await thumbnailResponse.blob();
-      await uploadBytes(thumbnailRef, thumbnailBlob);
+      await uploadBytes(thumbnailRef, thumbnailBlob, {
+        contentType: 'image/jpeg'
+      });
 
       // Get the download URLs
       const [videoUrl, thumbnailUrl] = await Promise.all([
@@ -421,7 +430,8 @@ export class VideoService {
         ],
         viewCount: 0,
         authorId: videoData.authorId,
-        authorName: videoData.authorName
+        authorName: videoData.authorName,
+        format: videoContentType // Store the video format
       };
 
       const docRef = await addDoc(videosRef, videoDoc);

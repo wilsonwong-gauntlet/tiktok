@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve, basename, join, dirname } from 'path';
 import * as readline from 'readline';
 import ffmpeg from 'fluent-ffmpeg';
@@ -54,7 +54,8 @@ async function getCommonMetadata() {
 
 async function generateThumbnail(videoPath: string): Promise<string> {
   const thumbnailDir = join(dirname(videoPath), 'thumbnails');
-  const thumbnailPath = join(thumbnailDir, `${basename(videoPath, '.mp4')}_thumb.jpg`);
+  const videoName = basename(videoPath).split('.')[0];
+  const thumbnailPath = join(thumbnailDir, `${videoName}_thumb.jpg`);
 
   // Create thumbnails directory if it doesn't exist
   if (!existsSync(thumbnailDir)) {
@@ -64,7 +65,10 @@ async function generateThumbnail(videoPath: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     ffmpeg(videoPath)
       .on('end', () => resolve(thumbnailPath))
-      .on('error', (err: Error) => reject(err))
+      .on('error', (err: Error) => {
+        console.error('Error generating thumbnail:', err);
+        reject(err);
+      })
       .screenshots({
         timestamps: ['50%'], // Take screenshot from middle of video
         filename: basename(thumbnailPath),
@@ -74,11 +78,48 @@ async function generateThumbnail(videoPath: string): Promise<string> {
   });
 }
 
+async function convertToMp4(inputPath: string): Promise<string> {
+  const outputPath = join(dirname(inputPath), `${basename(inputPath, '.webm')}.mp4`);
+  
+  return new Promise<string>((resolve, reject) => {
+    ffmpeg(inputPath)
+      .outputOptions([
+        '-c:v libx264', // Use H.264 codec for video
+        '-c:a aac',     // Use AAC codec for audio
+        '-strict experimental',
+        '-b:a 192k'     // Audio bitrate
+      ])
+      .toFormat('mp4')
+      .on('end', () => {
+        console.log('Video conversion completed');
+        resolve(outputPath);
+      })
+      .on('error', (err: Error) => {
+        console.error('Error converting video:', err);
+        reject(err);
+      })
+      .save(outputPath);
+  });
+}
+
 async function uploadVideo(filePath: string, commonMetadata?: { category: string; commonTags: string[] }) {
   try {
     if (!existsSync(filePath)) {
       console.error(`File not found: ${filePath}`);
       return null;
+    }
+
+    // Convert WebM to MP4 if necessary
+    let processedFilePath = filePath;
+    if (filePath.toLowerCase().endsWith('.webm')) {
+      console.log('Converting WebM to MP4...');
+      try {
+        processedFilePath = await convertToMp4(filePath);
+        console.log('Conversion completed:', processedFilePath);
+      } catch (error) {
+        console.error('Failed to convert video:', error);
+        return null;
+      }
     }
 
     // Get video metadata from user input
@@ -96,12 +137,12 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
 
     // Generate thumbnail
     console.log('Generating thumbnail...');
-    const thumbnailPath = await generateThumbnail(filePath);
+    const thumbnailPath = await generateThumbnail(processedFilePath);
     console.log('Thumbnail generated:', thumbnailPath);
 
     // Prepare video data
     const videoData = {
-      filePath: resolve(filePath),
+      filePath: resolve(processedFilePath),
       thumbnailPath,
       title,
       description,
@@ -115,6 +156,16 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
     console.log('\nUploading video...');
     const videoId = await uploadLocalVideo(videoData);
     console.log(`Video uploaded successfully! Video ID: ${videoId}`);
+
+    // Clean up converted file if it was created
+    if (processedFilePath !== filePath && existsSync(processedFilePath)) {
+      try {
+        unlinkSync(processedFilePath);
+        console.log('Cleaned up converted file');
+      } catch (error) {
+        console.warn('Failed to clean up converted file:', error);
+      }
+    }
 
     return videoId;
   } catch (error) {
