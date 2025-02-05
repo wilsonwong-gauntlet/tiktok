@@ -2,8 +2,14 @@ export interface Note {
   id: string;
   userId: string;
   videoId: string;
-  content: string;
+  content: string;  // Quick capture
   keyTakeaways: string[];
+  reflections: {
+    understanding: string[];
+    gaps: string[];
+    applications: string[];
+    connections: string[];
+  };
   createdAt: Date;
   updatedAt: Date;
 }

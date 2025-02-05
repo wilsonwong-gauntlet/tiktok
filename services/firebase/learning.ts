@@ -16,7 +16,18 @@ import { db } from './index';
 import { Note, Quiz, QuizAttempt, LearningConcept, RetentionPrompt } from '../../types/video';
 
 // Notes
-export async function saveNote(userId: string, videoId: string, content: string, keyTakeaways: string[]) {
+export async function saveNote(
+  userId: string, 
+  videoId: string, 
+  content: string, 
+  keyTakeaways: string[],
+  reflections: {
+    understanding: string[];
+    gaps: string[];
+    applications: string[];
+    connections: string[];
+  }
+) {
   try {
     const notesRef = collection(db, 'users', userId, 'notes');
     const noteData = {
@@ -24,6 +35,7 @@ export async function saveNote(userId: string, videoId: string, content: string,
       videoId,
       content,
       keyTakeaways,
+      reflections,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

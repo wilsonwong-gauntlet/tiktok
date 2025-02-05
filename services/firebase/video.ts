@@ -10,8 +10,7 @@ import {
   addDoc,
   serverTimestamp,
   QueryDocumentSnapshot,
-  where,
-  setDoc
+  updateDoc
 } from 'firebase/firestore';
 import { db } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
@@ -171,39 +170,50 @@ export class VideoService {
 
   static async getSummary(videoId: string): Promise<VideoSummary | null> {
     try {
-      const summaryDoc = await getDoc(doc(db, 'videoSummaries', videoId));
-      if (!summaryDoc.exists()) return null;
-      return summaryDoc.data() as VideoSummary;
+      const videoRef = doc(db, VIDEOS_COLLECTION, videoId);
+      const videoDoc = await getDoc(videoRef);
+      
+      if (!videoDoc.exists()) {
+        return null;
+      }
+
+      const videoData = videoDoc.data();
+      return videoData.summary || null;
     } catch (error) {
-      console.error('Error fetching video summary:', error);
-      return null;
+      console.error('Error getting video summary:', error);
+      throw error;
     }
   }
 
   static async generateSummary(videoId: string): Promise<VideoSummary | null> {
     try {
-      // TODO: Integrate with AI service to generate summary
-      // For now, return mock data
+      const videoRef = doc(db, VIDEOS_COLLECTION, videoId);
+      
+      // For now, generate a mock summary
+      // TODO: Integrate with actual AI service
       const mockSummary: VideoSummary = {
         key_points: [
-          "Introduction to machine learning concepts",
-          "Supervised vs unsupervised learning",
-          "Common applications and use cases"
+          "First key point about the video content",
+          "Second important point from the video",
+          "Third significant takeaway"
         ],
         main_concepts: [
-          "Machine Learning",
-          "Data Science",
-          "Neural Networks"
+          "Primary Concept",
+          "Secondary Concept",
+          "Related Theory"
         ],
         generated_at: new Date()
       };
 
-      // Store the summary
-      await setDoc(doc(db, 'videoSummaries', videoId), mockSummary);
+      // Save the summary to the video document
+      await updateDoc(videoRef, {
+        summary: mockSummary
+      });
+
       return mockSummary;
     } catch (error) {
       console.error('Error generating video summary:', error);
-      return null;
+      throw error;
     }
   }
 } 

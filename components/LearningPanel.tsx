@@ -19,35 +19,28 @@ interface LearningPanelProps {
 
 type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition';
 
-interface ReflectionPrompts {
-  understanding: string[];
-  gaps: string[];
-  applications: string[];
-  connections: string[];
-}
-
-const REFLECTION_TEMPLATE: ReflectionPrompts = {
+const REFLECTION_TEMPLATE = {
   understanding: [
-    "What are the key concepts I learned?",
-    "How would I explain this to someone else?",
-    "What examples demonstrate these concepts?",
+    "What are the main concepts I learned from this video?",
+    "How does this connect to what I already know?",
+    "What examples helped me understand the concepts better?"
   ],
   gaps: [
-    "What parts am I unsure about?",
-    "Which concepts need more practice?",
-    "What questions remain unanswered?",
+    "What parts of the content were unclear to me?",
+    "What questions do I still have?",
+    "What topics do I need to review further?"
   ],
   applications: [
-    "How can I apply this in real situations?",
-    "What projects could I build with this?",
-    "How does this connect to my goals?",
+    "How can I apply these concepts in my work?",
+    "What specific projects could benefit from this knowledge?",
+    "What are some real-world examples of these concepts?"
   ],
   connections: [
-    "How does this relate to what I already know?",
-    "What other topics connect to this?",
-    "What deeper principles are at work here?",
-  ],
-};
+    "How does this relate to other topics I've learned?",
+    "What patterns or principles are similar to other areas?",
+    "What interdisciplinary connections can I make?"
+  ]
+} as const;
 
 export default function LearningPanel({
   visible,
@@ -59,7 +52,19 @@ export default function LearningPanel({
 }: LearningPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [notes, setNotes] = useState('');
-  const [keyTakeaways, setKeyTakeaways] = useState<string[]>([]);
+  const [keyTakeaways, setKeyTakeaways] = useState<string[]>(['']);
+  const [reflections, setReflections] = useState<{
+    understanding: string[];
+    gaps: string[];
+    applications: string[];
+    connections: string[];
+  }>({
+    understanding: ['', '', ''],
+    gaps: ['', '', ''],
+    applications: ['', '', ''],
+    connections: ['', '', ''],
+  });
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
@@ -83,6 +88,9 @@ export default function LearningPanel({
       if (note) {
         setNotes(note.content);
         setKeyTakeaways(note.keyTakeaways);
+        if (note.reflections) {
+          setReflections(note.reflections);
+        }
       }
     } catch (error) {
       console.error('Error loading notes:', error);
@@ -95,15 +103,27 @@ export default function LearningPanel({
     if (!auth.currentUser) return;
     
     try {
-      setLoading(true);
-      await saveNote(auth.currentUser.uid, videoId, notes, keyTakeaways);
-      // Show success feedback
+      setSaveStatus('saving');
+      await saveNote(auth.currentUser.uid, videoId, notes, keyTakeaways, reflections);
+      setSaveStatus('success');
+      // Reset status after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (error) {
       console.error('Error saving notes:', error);
-      // Show error feedback
-    } finally {
-      setLoading(false);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
+  };
+
+  const handleReflectionChange = (
+    section: keyof typeof reflections,
+    index: number,
+    value: string
+  ) => {
+    setReflections(prev => ({
+      ...prev,
+      [section]: prev[section].map((item, i) => i === index ? value : item)
+    }));
   };
 
   const handleQuizSubmit = async () => {
@@ -148,6 +168,10 @@ export default function LearningPanel({
     }
   };
 
+  const handleAddTakeaway = () => {
+    setKeyTakeaways([...keyTakeaways, '']);
+  };
+
   const renderTab = (tab: Tab, label: string, icon: string) => (
     <TouchableOpacity
       style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -177,63 +201,7 @@ export default function LearningPanel({
           </ScrollView>
         );
       case 'notes':
-        return (
-          <ScrollView style={styles.content}>
-            <Text style={styles.label}>Quick Capture</Text>
-            <TextInput
-              style={styles.notesInput}
-              multiline
-              placeholder="Write your immediate thoughts..."
-              placeholderTextColor="#666"
-              value={notes}
-              onChangeText={setNotes}
-            />
-            
-            <Text style={styles.sectionTitle}>Structured Reflection</Text>
-            {Object.entries(REFLECTION_TEMPLATE).map(([section, prompts]) => (
-              <View key={section} style={styles.reflectionSection}>
-                <Text style={styles.reflectionTitle}>
-                  {section.charAt(0).toUpperCase() + section.slice(1)}
-                </Text>
-                {prompts.map((prompt, index) => (
-                  <View key={index} style={styles.promptContainer}>
-                    <Text style={styles.promptText}>{prompt}</Text>
-                    <TextInput
-                      style={styles.reflectionInput}
-                      multiline
-                      placeholder="Your thoughts..."
-                      placeholderTextColor="#666"
-                    />
-                  </View>
-                ))}
-              </View>
-            ))}
-
-            <Text style={styles.label}>Key Takeaways</Text>
-            {keyTakeaways.map((takeaway, index) => (
-              <View key={index} style={styles.takeawayContainer}>
-                <TextInput
-                  style={styles.takeawayInput}
-                  value={takeaway}
-                  onChangeText={(text) => {
-                    const newTakeaways = [...keyTakeaways];
-                    newTakeaways[index] = text;
-                    setKeyTakeaways(newTakeaways);
-                  }}
-                  placeholder="Enter a key takeaway..."
-                  placeholderTextColor="#666"
-                />
-              </View>
-            ))}
-            
-            <TouchableOpacity 
-              style={styles.button}
-              onPress={handleSaveNotes}
-            >
-              <Text style={styles.buttonText}>Save Reflection</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        );
+        return renderNotesContent();
       case 'quiz':
         return renderQuizContent();
       case 'reading':
@@ -328,6 +296,87 @@ export default function LearningPanel({
         );
     }
   };
+
+  const renderNotesContent = () => (
+    <ScrollView style={styles.content}>
+      <Text style={styles.label}>Quick Capture</Text>
+      <TextInput
+        style={styles.notesInput}
+        multiline
+        placeholder="Write your immediate thoughts..."
+        placeholderTextColor="#666"
+        value={notes}
+        onChangeText={setNotes}
+      />
+      
+      <Text style={styles.sectionTitle}>Structured Reflection</Text>
+      {Object.entries(REFLECTION_TEMPLATE).map(([section, prompts]) => (
+        <View key={section} style={styles.reflectionSection}>
+          <Text style={styles.reflectionTitle}>
+            {section.charAt(0).toUpperCase() + section.slice(1)}
+          </Text>
+          {prompts.map((prompt, index) => (
+            <View key={index} style={styles.promptContainer}>
+              <Text style={styles.promptText}>{prompt}</Text>
+              <TextInput
+                style={styles.reflectionInput}
+                multiline
+                placeholder="Your thoughts..."
+                placeholderTextColor="#666"
+                value={reflections[section as keyof typeof reflections][index]}
+                onChangeText={(text) => handleReflectionChange(section as keyof typeof reflections, index, text)}
+              />
+            </View>
+          ))}
+        </View>
+      ))}
+
+      <Text style={styles.label}>Key Takeaways</Text>
+      {keyTakeaways.map((takeaway, index) => (
+        <View key={index} style={styles.takeawayContainer}>
+          <TextInput
+            style={styles.takeawayInput}
+            multiline
+            value={takeaway}
+            onChangeText={(text) => {
+              const newTakeaways = [...keyTakeaways];
+              newTakeaways[index] = text;
+              setKeyTakeaways(newTakeaways);
+            }}
+            placeholder="Enter a key takeaway..."
+            placeholderTextColor="#666"
+          />
+        </View>
+      ))}
+      
+      <TouchableOpacity 
+        style={styles.addButton} 
+        onPress={handleAddTakeaway}
+      >
+        <Text style={styles.addButtonText}>+ Add Takeaway</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[
+          styles.button,
+          saveStatus === 'saving' && styles.buttonDisabled
+        ]}
+        onPress={handleSaveNotes}
+        disabled={saveStatus === 'saving'}
+      >
+        <Text style={styles.buttonText}>
+          {saveStatus === 'saving' ? 'Saving...' : 'Save Reflection'}
+        </Text>
+      </TouchableOpacity>
+
+      {saveStatus === 'success' && (
+        <Text style={styles.successText}>✓ Saved successfully</Text>
+      )}
+      {saveStatus === 'error' && (
+        <Text style={styles.errorText}>⚠ Error saving reflection</Text>
+      )}
+    </ScrollView>
+  );
 
   const renderQuizContent = () => {
     if (!quiz) return <Text style={styles.contentText}>No quiz available for this video.</Text>;
@@ -513,25 +562,28 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   takeawayContainer: {
+    marginBottom: 12,
+  },
+  takeawayInput: {
     backgroundColor: '#222',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 10,
-  },
-  takeawayText: {
     color: '#fff',
     fontSize: 16,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   addButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#222',
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
-    marginTop: 10,
+    marginBottom: 20,
   },
   addButtonText: {
-    color: '#fff',
+    color: '#666',
     fontSize: 16,
+    fontWeight: '500',
   },
   readingItem: {
     backgroundColor: '#222',
@@ -614,41 +666,46 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   reflectionSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   reflectionTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
   },
   promptContainer: {
-    marginBottom: 10,
+    marginBottom: 16,
   },
   promptText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
   reflectionInput: {
-    backgroundColor: '#222',
+    backgroundColor: '#f5f5f5',
     borderRadius: 8,
     padding: 12,
-    color: '#fff',
-    fontSize: 16,
-    minHeight: 120,
-    textAlignVertical: 'top',
-  },
-  takeawayInput: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    padding: 12,
-    color: '#fff',
-    fontSize: 16,
-    minHeight: 120,
+    minHeight: 80,
+    color: '#333',
+    fontSize: 14,
     textAlignVertical: 'top',
   },
   intuitionSection: {
     marginBottom: 20,
+  },
+  successText: {
+    color: '#1a472a',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginTop: 10,
   },
 }); 
