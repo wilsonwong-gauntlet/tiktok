@@ -12,13 +12,14 @@ import { useVideoSave } from '../contexts/VideoSaveContext';
 interface VideoCardProps {
   video: VideoType;
   isActive: boolean;
+  containerHeight?: number;
 }
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
-export default function VideoCard({ video, isActive }: VideoCardProps) {
+export default function VideoCard({ video, isActive, containerHeight }: VideoCardProps) {
   const [saved, setSaved] = useState(false);
   const [learningPanelVisible, setLearningPanelVisible] = useState(false);
   const [commentSectionVisible, setCommentSectionVisible] = useState(false);
@@ -85,7 +86,7 @@ export default function VideoCard({ video, isActive }: VideoCardProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
         style={styles.videoContainer} 
         onPress={handlePlayPause}

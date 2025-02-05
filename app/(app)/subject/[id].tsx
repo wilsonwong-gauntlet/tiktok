@@ -1,5 +1,5 @@
 import { useLocalSearchParams, Stack, router } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   Dimensions,
   TouchableOpacity,
   ViewToken,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SUBJECT_DATA, MainSubject } from '../../../types/subject';
 import { Video } from '../../../types/video';
 import { VideoService } from '../../../services/firebase/video';
@@ -18,8 +20,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 const { width, height: WINDOW_HEIGHT } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 49;
-const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
+const TAB_BAR_HEIGHT = 49; // Bottom tab bar
+const TOP_TAB_HEIGHT = 45; // Top tab bar
+const HEADER_HEIGHT = 44; // Navigation header
+const BOTTOM_SPACE = Platform.OS === 'ios' ? 34 : 0; // Home indicator height on iOS
+const TOP_SPACE = Platform.OS === 'ios' ? 47 : 0; // Status bar height on iOS
+const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT - TOP_TAB_HEIGHT - HEADER_HEIGHT - BOTTOM_SPACE - TOP_SPACE;
 
 type Tab = 'overview' | 'learn' | 'progress' | 'practice';
 
@@ -27,11 +33,23 @@ export default function SubjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const subject = SUBJECT_DATA[id as MainSubject];
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const insets = useSafeAreaInsets();
+  
+  // Calculate available height for video
+  const videoHeight = useMemo(() => {
+    const headerHeight = 44; // Stack navigation header
+    const topTabHeight = 45; // Our custom top tabs
+    const bottomTabHeight = 49; // Standard tab bar height
+    const bottomTabPadding = 30; // Combined top and bottom padding of our custom bottom tabs
+    
+    // Calculate height considering safe areas and UI elements
+    return WINDOW_HEIGHT - headerHeight - topTabHeight - bottomTabHeight - bottomTabPadding - insets.top - insets.bottom;
+  }, [insets]);
   
   // Video feed state
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | null>(null);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | undefined>(undefined);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [error, setError] = useState<string | undefined>();
 
@@ -56,7 +74,7 @@ export default function SubjectDetail() {
       );
       
       setVideos(prev => loadMore ? [...prev, ...result.videos] : result.videos);
-      setLastVisible(result.lastVisible);
+      setLastVisible(result.lastVisible || undefined);
     } catch (error) {
       console.error('Error loading videos:', error);
       setError('Failed to load videos');
@@ -141,38 +159,46 @@ export default function SubjectDetail() {
     }
 
     return (
-      <FlatList
-        data={videos}
-        renderItem={({ item, index }) => (
-          <VideoCard video={item} isActive={index === currentVideoIndex} />
-        )}
-        keyExtractor={(item) => item.id}
-        onEndReached={() => loadVideos(true)}
-        onEndReachedThreshold={0.5}
-        snapToInterval={SCREEN_HEIGHT}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_HEIGHT,
-          offset: SCREEN_HEIGHT * index,
-          index,
-        })}
-        removeClippedSubviews={true}
-        windowSize={3}
-        maxToRenderPerBatch={2}
-        updateCellsBatchingPeriod={100}
-        initialNumToRender={2}
-        ListFooterComponent={() =>
-          loading ? (
-            <View style={styles.footer}>
-              <ActivityIndicator color="#fff" />
+      <View style={styles.learnContainer}>
+        <FlatList
+          data={videos}
+          renderItem={({ item, index }) => (
+            <View style={[styles.videoContainer, { height: videoHeight }]}>
+              <VideoCard 
+                video={item} 
+                isActive={index === currentVideoIndex}
+                containerHeight={videoHeight}
+              />
             </View>
-          ) : null
-        }
-      />
+          )}
+          keyExtractor={(item) => item.id}
+          onEndReached={() => loadVideos(true)}
+          onEndReachedThreshold={0.5}
+          snapToInterval={videoHeight}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          getItemLayout={(_, index) => ({
+            length: videoHeight,
+            offset: videoHeight * index,
+            index,
+          })}
+          removeClippedSubviews={true}
+          windowSize={3}
+          maxToRenderPerBatch={2}
+          updateCellsBatchingPeriod={100}
+          initialNumToRender={2}
+          ListFooterComponent={() =>
+            loading ? (
+              <View style={[styles.footer, { height: videoHeight }]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : null
+          }
+        />
+      </View>
     );
   };
 
@@ -236,7 +262,7 @@ export default function SubjectDetail() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <Stack.Screen
         options={{
           title: subject.name,
@@ -288,7 +314,7 @@ export default function SubjectDetail() {
       </View>
       
       {renderBottomTabs()}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -386,8 +412,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
   },
+  learnContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  videoContainer: {
+    backgroundColor: '#000',
+    overflow: 'hidden',
+  },
   footer: {
-    height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },
