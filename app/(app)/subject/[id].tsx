@@ -11,7 +11,6 @@ import {
   ViewToken,
   Platform,
   Image,
-  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SUBJECT_DATA, MainSubject } from '../../../types/subject';
@@ -20,7 +19,7 @@ import { VideoService } from '../../../services/firebase/video';
 import VideoCard from '../../../components/VideoCard';
 import { Ionicons } from '@expo/vector-icons';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
-import { auth } from '../../../services/firebase/index';
+import { auth, fetchSavedVideos } from '../../../services/firebase/index';
 import { useVideoSave } from '../../../contexts/VideoSaveContext';
 
 const { width, height: WINDOW_HEIGHT } = Dimensions.get('window');
@@ -38,7 +37,7 @@ export default function SubjectDetail() {
   const subject = SUBJECT_DATA[id as MainSubject];
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const insets = useSafeAreaInsets();
-  const { savedVideoIds } = useVideoSave();
+  const { subscribe } = useVideoSave();
   
   // Calculate available height for video
   const videoHeight = useMemo(() => {
@@ -53,47 +52,58 @@ export default function SubjectDetail() {
   
   // Video feed state
   const [videos, setVideos] = useState<Video[]>([]);
-  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingSaved, setLoadingSaved] = useState(true);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | undefined>(undefined);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [error, setError] = useState<string | undefined>();
 
-  // Load saved videos when tab changes or savedVideoIds updates
-  useEffect(() => {
-    if (activeTab === 'home') {
-      loadSavedVideos();
-    }
-  }, [activeTab, savedVideoIds]);
+  // Add saved videos state
+  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(true);
 
-  // Load videos for video feed
+  // Subscribe to video save changes
   useEffect(() => {
-    if (activeTab === 'videos') {
-      loadVideos();
-    }
-  }, [activeTab]);
+    const unsubscribe = subscribe(() => {
+      loadSavedVideos();
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load saved videos when component mounts
+  useEffect(() => {
+    loadSavedVideos();
+  }, []);
 
   const loadSavedVideos = async () => {
     if (!auth.currentUser) return;
     
     try {
       setLoadingSaved(true);
-      const result = await VideoService.searchVideos(
-        '',
-        { category: subject.name },
-        { field: 'createdAt', direction: 'desc' }
-      );
-      
-      // Filter videos that are in savedVideoIds
-      const savedOnes = result.videos.filter(video => savedVideoIds.includes(video.id));
-      setSavedVideos(savedOnes);
+      const videos = await fetchSavedVideos(auth.currentUser.uid);
+      // Filter videos by current subject
+      const subjectVideos = videos.filter(video => video.category === subject.name);
+      setSavedVideos(subjectVideos);
     } catch (error) {
       console.error('Error loading saved videos:', error);
     } finally {
       setLoadingSaved(false);
     }
   };
+
+  const handleVideoPress = (videoId: string) => {
+    setActiveTab('videos');
+    // Find the index of the video in the videos array
+    const index = videos.findIndex(v => v.id === videoId);
+    if (index !== -1) {
+      setCurrentVideoIndex(index);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'videos') {
+      loadVideos();
+    }
+  }, [activeTab]);
 
   const loadVideos = async (loadMore = false) => {
     try {
@@ -134,25 +144,8 @@ export default function SubjectDetail() {
     itemVisiblePercentThreshold: 50
   };
 
-  const renderSavedVideoItem = ({ item }: { item: Video }) => (
-    <TouchableOpacity 
-      style={styles.savedVideoItem}
-      onPress={() => setActiveTab('videos')}
-    >
-      <Image 
-        source={{ uri: item.thumbnailUrl }} 
-        style={styles.thumbnail}
-        resizeMode="cover"
-      />
-      <View style={styles.videoInfo}>
-        <Text style={styles.videoTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.videoAuthor}>{item.authorName}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   const renderHomeContent = () => (
-    <ScrollView style={styles.homeSection}>
+    <View style={styles.homeSection}>
       <Text style={styles.description}>{subject.description}</Text>
       
       <View style={styles.statsContainer}>
@@ -171,32 +164,49 @@ export default function SubjectDetail() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Saved Videos</Text>
+        {loadingSaved ? (
+          <View style={styles.savedVideosLoading}>
+            <ActivityIndicator size="small" color="#fff" />
+          </View>
+        ) : savedVideos.length === 0 ? (
+          <View style={styles.savedVideosEmpty}>
+            <Text style={styles.emptyText}>No saved videos in this subject</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={savedVideos}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.savedVideoCard}
+                onPress={() => handleVideoPress(item.id)}
+              >
+                <Image
+                  source={{ uri: item.thumbnailUrl }}
+                  style={styles.savedVideoThumbnail}
+                />
+                <View style={styles.savedVideoInfo}>
+                  <Text style={styles.savedVideoTitle} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.savedVideoAuthor} numberOfLines={1}>
+                    {item.authorName}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id}
+          />
+        )}
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Continue Watching</Text>
         <View style={styles.continueWatchingEmpty}>
           <Text style={styles.emptyText}>No videos in progress</Text>
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Saved Videos</Text>
-        {loadingSaved ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#fff" />
-          </View>
-        ) : savedVideos.length > 0 ? (
-          <FlatList
-            data={savedVideos}
-            renderItem={renderSavedVideoItem}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.savedVideosContainer}
-          />
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No saved videos yet</Text>
-          </View>
-        )}
       </View>
 
       <View style={styles.section}>
@@ -208,7 +218,7 @@ export default function SubjectDetail() {
           <Text style={styles.startButtonText}>Browse All Videos</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 
   const renderLearnContent = () => {
@@ -535,44 +545,41 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
   },
-  savedVideosContainer: {
-    paddingHorizontal: 0,
+  savedVideosLoading: {
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  savedVideoItem: {
+  savedVideosEmpty: {
+    height: 180,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  savedVideoCard: {
     width: 200,
     marginRight: 12,
-    borderRadius: 12,
     backgroundColor: '#111',
+    borderRadius: 12,
     overflow: 'hidden',
   },
-  thumbnail: {
+  savedVideoThumbnail: {
     width: '100%',
     height: 112,
     backgroundColor: '#222',
   },
-  videoInfo: {
+  savedVideoInfo: {
     padding: 12,
   },
-  videoTitle: {
+  savedVideoTitle: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 4,
   },
-  videoAuthor: {
+  savedVideoAuthor: {
     color: '#666',
     fontSize: 12,
-  },
-  loadingContainer: {
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    height: 100,
-    backgroundColor: '#111',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 }); 

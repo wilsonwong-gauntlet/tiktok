@@ -6,7 +6,8 @@ import { auth } from '../../../services/firebase/index';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { fetchSavedVideos } from '../../../services/firebase/index';
-import { Video } from '../../../types/video';
+import { Video, LearningConcept } from '../../../types/video';
+import LearningDashboard from '../../../components/LearningDashboard';
 import { useVideoSave } from '../../../contexts/VideoSaveContext';
 
 export default function Profile() {
@@ -56,6 +57,15 @@ export default function Profile() {
     });
   };
 
+  const handleConceptSelect = (concept: LearningConcept) => {
+    console.log('Profile: Selecting concept:', concept);
+    if (!concept || !concept.id) {
+      console.error('Invalid concept data:', concept);
+      return;
+    }
+    router.push(`/(app)/concept/${concept.id}`);
+  };
+
   if (!auth.currentUser) {
     router.replace('/login');
     return null;
@@ -69,6 +79,13 @@ export default function Profile() {
             <Ionicons name="person-circle" size={80} color="#fff" />
           </View>
           <Text style={styles.email}>{auth.currentUser?.email}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Learning Progress</Text>
+          <View style={styles.progressContainer}>
+            <LearningDashboard onConceptSelect={handleConceptSelect} />
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -136,6 +153,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
+  },
+  progressContainer: {
+    alignItems: 'center',
+    padding: 20,
   },
   savedVideosContainer: {
     padding: 10,
