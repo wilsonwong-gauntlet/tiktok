@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from '../../../types/video';
@@ -97,8 +97,14 @@ export default function Search() {
         params: { videoId: item.id }
       })}
     >
+      <Image 
+        source={{ uri: item.thumbnailUrl }}
+        style={styles.thumbnail}
+        resizeMode="cover"
+      />
       <View style={styles.videoInfo}>
         <Text style={styles.videoTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.authorName} numberOfLines={1}>{item.authorName}</Text>
         <Text style={styles.videoDescription} numberOfLines={2}>{item.description}</Text>
         {item.aiSummary && (
           <Text style={styles.videoSummary} numberOfLines={2}>{item.aiSummary}</Text>
@@ -263,6 +269,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
   },
+  thumbnail: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#222',
+  },
   videoInfo: {
     padding: 12,
   },
@@ -270,6 +281,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  authorName: {
+    color: '#666',
+    fontSize: 14,
     marginBottom: 4,
   },
   videoDescription: {
