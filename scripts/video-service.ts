@@ -1,7 +1,6 @@
 import { db, storage } from './firebase-admin';
 import { readFileSync } from 'fs';
 import * as admin from 'firebase-admin';
-import { TranscriptionService } from '../services/openai/transcription';
 
 interface LocalVideoUpload {
   filePath: string;
@@ -66,22 +65,10 @@ export async function uploadLocalVideo(videoData: LocalVideoUpload): Promise<str
       ],
       viewCount: 0,
       authorId: videoData.authorId,
-      authorName: videoData.authorName,
-      transcriptionStatus: 'pending'
+      authorName: videoData.authorName
     };
 
     const docRef = await db.collection('videos').add(videoDoc);
-    
-    // Start transcription process
-    console.log('Starting transcription process...');
-    TranscriptionService.processVideo(docRef.id, videoFileName)
-      .then(transcription => {
-        console.log('Transcription completed successfully');
-      })
-      .catch(error => {
-        console.error('Error during transcription:', error);
-      });
-
     return docRef.id;
   } catch (error) {
     console.error('Error uploading video:', error);
