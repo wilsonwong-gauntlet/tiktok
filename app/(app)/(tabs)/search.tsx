@@ -199,8 +199,8 @@ export default function Search() {
     if (text.trim()) {
       debouncedSearch(text, searchState.filters);
     } else {
-      // Clear results when search is empty
-      setSearchResults(prev => ({ ...prev, videos: [] }));
+      // Load all videos when search is empty
+      performSearch(false, '', searchState.filters);
     }
   };
 
@@ -235,6 +235,8 @@ export default function Search() {
 
   const clearSearch = () => {
     updateSearchState({ query: '' });
+    // Load all videos when clearing search
+    performSearch(false, '', searchState.filters);
   };
 
   const clearFilters = () => {
