@@ -66,6 +66,10 @@ export interface Video {
     initialReview: number;  // hours after watching
     reviewIntervals: number[];  // hours between reviews
   };
+  transcription?: string;
+  transcriptionStatus: 'pending' | 'completed' | 'error';
+  transcriptionError?: string;
+  transcriptionUpdatedAt?: Date;
 }
 
 export interface FurtherReading {

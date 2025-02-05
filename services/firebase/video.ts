@@ -17,6 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
+import { TranscriptionService } from '../openai/transcription';
 
 const VIDEOS_PER_PAGE = 10;
 const VIDEOS_COLLECTION = 'videos';
@@ -467,10 +468,22 @@ export class VideoService {
         viewCount: 0,
         authorId: videoData.authorId,
         authorName: videoData.authorName,
-        format: videoContentType // Store the video format
+        format: videoContentType, // Store the video format
+        transcriptionStatus: 'pending'
       };
 
       const docRef = await addDoc(videosRef, videoDoc);
+      
+      // Start transcription process
+      console.log('Starting transcription process...');
+      TranscriptionService.processVideo(docRef.id, videoUrl)
+        .then(transcription => {
+          console.log('Transcription completed successfully');
+        })
+        .catch(error => {
+          console.error('Error during transcription:', error);
+        });
+
       return docRef.id;
     } catch (error) {
       console.error('Error uploading video:', error);

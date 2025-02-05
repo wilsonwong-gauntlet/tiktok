@@ -1,24 +1,19 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import * as admin from 'firebase-admin';
+import { join } from 'path';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCA5xFRAu19FpUTFgXxzWWnyZ3_ZqOYpRs",
-  authDomain: "tiktok-3142f.firebaseapp.com",
-  projectId: "tiktok-3142f",
-  storageBucket: "tiktok-3142f.firebasestorage.app",
-  messagingSenderId: "733898101817",
-  appId: "1:733898101817:web:2f28459bd9f0fb726d69e8"
-};
+// Initialize Firebase Admin
+const serviceAccount = require('../config/firebase/service-account.json');
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: "tiktok-3142f.firebasestorage.app"
+});
 
 // Initialize Firestore
-const db = getFirestore(app);
+const db = admin.firestore();
 
 // Initialize Storage
-const storage = getStorage(app);
+const storage = admin.storage().bucket();
 
 export { app, db, storage };
 
