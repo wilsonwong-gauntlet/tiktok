@@ -14,7 +14,7 @@ import {
   where,
   deleteDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
 
@@ -56,12 +56,22 @@ export class VideoService {
       console.log('Snapshot size:', snapshot.size);
       const lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
       
+      console.log('\nDetailed video documents:');
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        console.log(`\nVideo ID: ${doc.id}`);
+        console.log(`Title: ${data.title}`);
+        console.log(`URL: ${data.url}`);
+        console.log(`Format: ${data.format || 'not specified'}`);
+        console.log(`Created At: ${data.createdAt?.toDate?.()}`);
+      });
+      
       const videos = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate()
       })) as Video[];
-      console.log('Processed videos:', videos.length);
+      console.log('\nProcessed videos:', videos.length);
 
       return {
         videos,
@@ -367,9 +377,35 @@ export class VideoService {
       const videosRef = collection(db, VIDEOS_COLLECTION);
       const snapshot = await getDocs(videosRef);
       
-      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      // Delete both Firestore documents and Storage files
+      const deletePromises = snapshot.docs.map(async (doc) => {
+        const videoData = doc.data();
+        const videoUrl = videoData.url;
+        const thumbnailUrl = videoData.thumbnailUrl;
+
+        // Extract file paths from URLs
+        const videoPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
+        const thumbnailPath = decodeURIComponent(thumbnailUrl.split('/o/')[1].split('?')[0]);
+
+        // Delete files from Storage
+        try {
+          const videoRef = ref(storage, videoPath);
+          const thumbnailRef = ref(storage, thumbnailPath);
+          await Promise.all([
+            deleteObject(videoRef),
+            deleteObject(thumbnailRef)
+          ]);
+          console.log(`Deleted storage files for video ${doc.id}`);
+        } catch (error) {
+          console.warn(`Failed to delete storage files for video ${doc.id}:`, error);
+        }
+
+        // Delete Firestore document
+        await deleteDoc(doc.ref);
+        console.log(`Deleted Firestore document ${doc.id}`);
+      });
+
       await Promise.all(deletePromises);
-      
       console.log('Cleared all videos successfully');
     } catch (error) {
       console.error('Error clearing videos:', error);
@@ -449,6 +485,55 @@ export class VideoService {
       return videoIds;
     } catch (error) {
       console.error('Error adding local videos:', error);
+      throw error;
+    }
+  }
+
+  static async validateAndCleanupVideos() {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const snapshot = await getDocs(videosRef);
+      
+      console.log('\nStarting video validation...');
+      const cleanupPromises = snapshot.docs.map(async (doc) => {
+        const videoData = doc.data();
+        const videoUrl = videoData.url;
+        console.log(`\nChecking video document ${doc.id}:`);
+        console.log(`Title: ${videoData.title}`);
+        console.log(`URL: ${videoUrl}`);
+
+        try {
+          // Extract storage path from URL
+          const videoPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
+          console.log(`Storage path: ${videoPath}`);
+
+          // Check if file exists in storage
+          const videoRef = ref(storage, videoPath);
+          try {
+            await getDownloadURL(videoRef);
+            console.log('Video file exists in storage');
+            return false; // Document is valid
+          } catch (storageError) {
+            if ((storageError as any)?.code === 'storage/object-not-found') {
+              console.log('Video file not found in storage, deleting document...');
+              await deleteDoc(doc.ref);
+              return true; // Document was deleted
+            } else {
+              console.error('Storage error:', storageError);
+              return false;
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing document ${doc.id}:`, error);
+          return false;
+        }
+      });
+
+      const results = await Promise.all(cleanupPromises);
+      const deletedCount = results.filter(Boolean).length;
+      console.log(`\nCleanup complete. Removed ${deletedCount} invalid video documents`);
+    } catch (error) {
+      console.error('Error validating videos:', error);
       throw error;
     }
   }
