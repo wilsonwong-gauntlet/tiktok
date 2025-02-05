@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FurtherReading } from '../types/video';
+import { FurtherReading, VideoSummary } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
+import { VideoService } from '../services/firebase/video';
 import { auth } from '../services/firebase/index';
 import { Note, Quiz } from '../types/video';
+import VideoSummarySection from './VideoSummarySection';
 
 interface LearningPanelProps {
   visible: boolean;
   onClose: () => void;
   title: string;
   videoId: string;
-  aiSummary?: string;
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
 }
@@ -53,7 +54,6 @@ export default function LearningPanel({
   onClose,
   title,
   videoId,
-  aiSummary,
   furtherReading,
   quiz,
 }: LearningPanelProps) {
@@ -64,10 +64,13 @@ export default function LearningPanel({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<VideoSummary | undefined>();
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   useEffect(() => {
     if (visible && auth.currentUser) {
       loadNotes();
+      loadSummary();
     }
   }, [visible, videoId]);
 
@@ -124,6 +127,27 @@ export default function LearningPanel({
     }
   };
 
+  const loadSummary = async () => {
+    try {
+      const videoSummary = await VideoService.getSummary(videoId);
+      setSummary(videoSummary || undefined);
+    } catch (error) {
+      console.error('Error loading summary:', error);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    try {
+      setGeneratingSummary(true);
+      const videoSummary = await VideoService.generateSummary(videoId);
+      setSummary(videoSummary || undefined);
+    } catch (error) {
+      console.error('Error generating summary:', error);
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
   const renderTab = (tab: Tab, label: string, icon: string) => (
     <TouchableOpacity
       style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -145,7 +169,11 @@ export default function LearningPanel({
       case 'summary':
         return (
           <ScrollView style={styles.content}>
-            <Text style={styles.contentText}>{aiSummary}</Text>
+            <VideoSummarySection
+              summary={summary}
+              isLoading={generatingSummary}
+              onGenerateSummary={handleGenerateSummary}
+            />
           </ScrollView>
         );
       case 'notes':

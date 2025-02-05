@@ -9,10 +9,12 @@ import {
   getDoc,
   addDoc,
   serverTimestamp,
-  QueryDocumentSnapshot
+  QueryDocumentSnapshot,
+  where,
+  setDoc
 } from 'firebase/firestore';
 import { db } from './index';
-import { Video, FurtherReading } from '../../types/video';
+import { Video, FurtherReading, VideoSummary } from '../../types/video';
 
 const VIDEOS_PER_PAGE = 10;
 const VIDEOS_COLLECTION = 'videos';
@@ -164,6 +166,44 @@ export class VideoService {
     } catch (error) {
       console.error('Error adding sample videos:', error);
       throw error;
+    }
+  }
+
+  static async getSummary(videoId: string): Promise<VideoSummary | null> {
+    try {
+      const summaryDoc = await getDoc(doc(db, 'videoSummaries', videoId));
+      if (!summaryDoc.exists()) return null;
+      return summaryDoc.data() as VideoSummary;
+    } catch (error) {
+      console.error('Error fetching video summary:', error);
+      return null;
+    }
+  }
+
+  static async generateSummary(videoId: string): Promise<VideoSummary | null> {
+    try {
+      // TODO: Integrate with AI service to generate summary
+      // For now, return mock data
+      const mockSummary: VideoSummary = {
+        key_points: [
+          "Introduction to machine learning concepts",
+          "Supervised vs unsupervised learning",
+          "Common applications and use cases"
+        ],
+        main_concepts: [
+          "Machine Learning",
+          "Data Science",
+          "Neural Networks"
+        ],
+        generated_at: new Date()
+      };
+
+      // Store the summary
+      await setDoc(doc(db, 'videoSummaries', videoId), mockSummary);
+      return mockSummary;
+    } catch (error) {
+      console.error('Error generating video summary:', error);
+      return null;
     }
   }
 } 

@@ -31,6 +31,12 @@ export interface QuizAttempt {
   completedAt: Date;
 }
 
+export interface VideoSummary {
+  key_points: string[];
+  main_concepts: string[];
+  generated_at: Date;
+}
+
 export interface Video {
   id: string;
   title: string;
@@ -38,7 +44,10 @@ export interface Video {
   url: string;
   thumbnailUrl: string;
   duration: number;
+  creator: string;
   createdAt: Date;
+  summary?: VideoSummary;
+  concepts: string[];  // References to related learning concepts
   category: string;
   tags: string[];
   aiSummary?: string;
@@ -47,7 +56,6 @@ export interface Video {
   viewCount: number;
   authorId: string;
   authorName: string;
-  concepts: LearningConcept[];
   retentionSchedule?: {
     initialReview: number;  // hours after watching
     reviewIntervals: number[];  // hours between reviews
