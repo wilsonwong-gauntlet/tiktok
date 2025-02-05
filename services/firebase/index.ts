@@ -17,6 +17,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { Video } from '../../types/video';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCA5xFRAu19FpUTFgXxzWWnyZ3_ZqOYpRs",
@@ -42,6 +43,9 @@ const auth = initializeAuth(app, {
 
 // Initialize Firestore
 const db = getFirestore(app);
+
+// Initialize Storage
+const storage = getStorage(app);
 
 const VIDEOS_PER_PAGE = 10;
 
@@ -232,5 +236,6 @@ export {
   saveVideo,
   unsaveVideo,
   fetchSavedVideos,
-  isVideoSaved
+  isVideoSaved,
+  storage
 }; 

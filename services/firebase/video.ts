@@ -14,11 +14,23 @@ import {
   where,
   deleteDoc
 } from 'firebase/firestore';
-import { db } from './index';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
 
 const VIDEOS_PER_PAGE = 10;
 const VIDEOS_COLLECTION = 'videos';
+
+interface LocalVideoUpload {
+  filePath: string;
+  thumbnailPath: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  authorId: string;
+  authorName: string;
+}
 
 export class VideoService {
   static async fetchVideos(lastVisible?: QueryDocumentSnapshot<any>) {
@@ -361,6 +373,72 @@ export class VideoService {
       console.log('Cleared all videos successfully');
     } catch (error) {
       console.error('Error clearing videos:', error);
+      throw error;
+    }
+  }
+
+  static async uploadLocalVideo(videoData: LocalVideoUpload): Promise<string> {
+    try {
+      // Create a reference to the video file in Firebase Storage
+      const videoFileName = `videos/${Date.now()}-${videoData.filePath.split('/').pop()}`;
+      const videoRef = ref(storage, videoFileName);
+
+      // Create a reference to the thumbnail in Firebase Storage
+      const thumbnailFileName = `thumbnails/${Date.now()}-${videoData.thumbnailPath.split('/').pop()}`;
+      const thumbnailRef = ref(storage, thumbnailFileName);
+
+      // Read and upload the video file
+      const videoResponse = await fetch(`file://${videoData.filePath}`);
+      const videoBlob = await videoResponse.blob();
+      await uploadBytes(videoRef, videoBlob);
+
+      // Read and upload the thumbnail
+      const thumbnailResponse = await fetch(`file://${videoData.thumbnailPath}`);
+      const thumbnailBlob = await thumbnailResponse.blob();
+      await uploadBytes(thumbnailRef, thumbnailBlob);
+
+      // Get the download URLs
+      const [videoUrl, thumbnailUrl] = await Promise.all([
+        getDownloadURL(videoRef),
+        getDownloadURL(thumbnailRef)
+      ]);
+
+      // Create a video document in Firestore
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const videoDoc = {
+        title: videoData.title,
+        description: videoData.description,
+        url: videoUrl,
+        thumbnailUrl: thumbnailUrl,
+        duration: 0, // TODO: Get video duration
+        createdAt: serverTimestamp(),
+        category: videoData.category,
+        tags: videoData.tags,
+        searchableText: [
+          ...videoData.title.toLowerCase().split(' '),
+          ...videoData.description.toLowerCase().split(' '),
+          ...videoData.tags.map(tag => tag.toLowerCase())
+        ],
+        viewCount: 0,
+        authorId: videoData.authorId,
+        authorName: videoData.authorName
+      };
+
+      const docRef = await addDoc(videosRef, videoDoc);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      throw error;
+    }
+  }
+
+  static async addLocalVideos(videos: LocalVideoUpload[]) {
+    try {
+      const uploadPromises = videos.map(video => this.uploadLocalVideo(video));
+      const videoIds = await Promise.all(uploadPromises);
+      return videoIds;
+    } catch (error) {
+      console.error('Error adding local videos:', error);
       throw error;
     }
   }

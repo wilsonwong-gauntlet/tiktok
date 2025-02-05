@@ -399,12 +399,12 @@ export default function Search() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search educational videos..."
-            placeholderTextColor="#666"
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search educational videos..."
+          placeholderTextColor="#666"
             value={searchState.query}
             onChangeText={handleSearchInput}
             onSubmitEditing={handleSearchSubmit}
@@ -421,7 +421,7 @@ export default function Search() {
           )}
         </View>
       </View>
-
+      
       <ActiveFilters
         filters={searchState.filters}
         onRemoveCategory={() => updateSearchState({
@@ -501,7 +501,7 @@ export default function Search() {
           searchResults.loading && searchResults.videos.length > 0 ? (
             <View style={styles.footer}>
               <ActivityIndicator color="#fff" />
-            </View>
+      </View>
           ) : null
         )}
       />
