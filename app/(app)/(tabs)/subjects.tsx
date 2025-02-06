@@ -11,14 +11,140 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Subject } from '../../../types/video';
+import { Subject, GraphData } from '../../../types/video';
 import { SubjectService } from '../../../services/firebase/subjects';
 import { auth } from '../../../services/firebase';
 import { router } from 'expo-router';
+import { Svg, Circle, Line, G, Text as SvgText } from 'react-native-svg';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 10;
-const CARD_WIDTH = (WINDOW_WIDTH - CARD_MARGIN * 4) / 2;
+const CARD_WIDTH = (WINDOW_WIDTH - (CARD_MARGIN * 4)) / 2;
+
+interface KnowledgeGraphPreviewProps {
+  data: GraphData;
+  width: number;
+  height: number;
+}
+
+const KnowledgeGraphPreview: React.FC<KnowledgeGraphPreviewProps> = ({ data, width, height }) => {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = Math.min(width, height) / 2.5;
+  const nodePositions = new Map();
+
+  // Find root nodes (nodes with no incoming edges)
+  const hasIncomingEdge = new Set(data.edges.map(edge => edge.target));
+  const rootNodes = data.nodes.filter(node => !hasIncomingEdge.has(node.id));
+
+  // Position root nodes at the top
+  rootNodes.forEach((node, index) => {
+    const x = centerX + (index - (rootNodes.length - 1) / 2) * (radius / 1.5);
+    nodePositions.set(node.id, {
+      x,
+      y: centerY - radius / 2
+    });
+  });
+
+  // Position child nodes below their parents
+  const positionedNodes = new Set(rootNodes.map(n => n.id));
+  let level = 1;
+  
+  while (positionedNodes.size < data.nodes.length && level < 3) {
+    data.edges.forEach(edge => {
+      if (positionedNodes.has(edge.source) && !positionedNodes.has(edge.target)) {
+        const parentPos = nodePositions.get(edge.source);
+        const siblingCount = data.edges.filter(e => e.source === edge.source).length;
+        const siblingIndex = data.edges.filter(e => e.source === edge.source && e.target <= edge.target).length;
+        
+        nodePositions.set(edge.target, {
+          x: parentPos.x + (siblingIndex - (siblingCount - 1) / 2) * (radius / 2),
+          y: parentPos.y + radius / 2
+        });
+        positionedNodes.add(edge.target);
+      }
+    });
+    level++;
+  }
+
+  // Position any remaining nodes in a circle
+  data.nodes.forEach(node => {
+    if (!nodePositions.has(node.id)) {
+      const angle = Math.random() * 2 * Math.PI;
+      nodePositions.set(node.id, {
+        x: centerX + radius * Math.cos(angle) / 2,
+        y: centerY + radius * Math.sin(angle) / 2
+      });
+    }
+  });
+
+  return (
+    <Svg width={width} height={height}>
+      {/* Draw edges */}
+      {data.edges.map((edge, index) => {
+        const source = nodePositions.get(edge.source);
+        const target = nodePositions.get(edge.target);
+        return (
+          <G key={`edge-${index}`}>
+            <Line
+              x1={source.x}
+              y1={source.y}
+              x2={target.x}
+              y2={target.y}
+              stroke="#444"
+              strokeWidth={2}
+            />
+            {/* Draw arrow */}
+            <Circle
+              cx={(source.x + target.x) / 2}
+              cy={(source.y + target.y) / 2}
+              r={3}
+              fill="#444"
+            />
+          </G>
+        );
+      })}
+
+      {/* Draw nodes */}
+      {data.nodes.map((node, index) => {
+        const pos = nodePositions.get(node.id);
+        const isRoot = rootNodes.includes(node);
+        const nodeSize = isRoot ? 10 : 8;
+        
+        return (
+          <G key={`node-${index}`}>
+            {/* Node background for contrast */}
+            <Circle
+              cx={pos.x}
+              cy={pos.y}
+              r={nodeSize + 3}
+              fill="#111"
+            />
+            {/* Main node circle */}
+            <Circle
+              cx={pos.x}
+              cy={pos.y}
+              r={nodeSize}
+              fill={isRoot ? '#2E7D32' : '#1a472a'}
+              stroke="#333"
+              strokeWidth={1.5}
+            />
+            {/* Label */}
+            <SvgText
+              x={pos.x}
+              y={pos.y + nodeSize + 12}
+              fill="#999"
+              fontSize={10}
+              textAnchor="middle"
+            >
+              {node.label.split(' ')[0]}
+            </SvgText>
+          </G>
+        );
+      })}
+    </Svg>
+  );
+};
 
 export default function SubjectsScreen() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -89,8 +215,12 @@ export default function SubjectsScreen() {
       <Text style={styles.statsText}>
         {subject.completedVideos} / {subject.videosCount} videos watched
       </Text>
-      <View style={styles.graphPlaceholder}>
-        <Text style={styles.graphText}>Knowledge Graph</Text>
+      <View style={styles.graphContainer}>
+        <KnowledgeGraphPreview 
+          data={subject.knowledgeGraph}
+          width={CARD_WIDTH}
+          height={140}
+        />
       </View>
     </TouchableOpacity>
   );
@@ -189,19 +319,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     padding: CARD_MARGIN,
+    justifyContent: 'space-between',
   },
   card: {
     width: CARD_WIDTH,
     backgroundColor: '#222',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 15,
-    margin: CARD_MARGIN,
+    marginBottom: CARD_MARGIN * 2,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   progressBarContainer: {
     height: 6,
@@ -217,23 +348,21 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   statsText: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  graphPlaceholder: {
-    height: 100,
-    backgroundColor: '#333',
-    borderRadius: 8,
+  graphContainer: {
+    height: 140,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  graphText: {
-    color: '#666',
-    fontSize: 12,
+    padding: 8,
   },
   loadingContainer: {
     flex: 1,
