@@ -17,6 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
 import { Video, FurtherReading, VideoSummary } from '../../types/video';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const VIDEOS_PER_PAGE = 10;
 const VIDEOS_COLLECTION = 'videos';
@@ -240,29 +241,39 @@ export class VideoService {
   static async generateSummary(videoId: string): Promise<VideoSummary | null> {
     try {
       const videoRef = doc(db, VIDEOS_COLLECTION, videoId);
+      const videoDoc = await getDoc(videoRef);
       
-      // For now, generate a mock summary
-      // TODO: Integrate with actual AI service
-      const mockSummary: VideoSummary = {
-        key_points: [
-          "First key point about the video content",
-          "Second important point from the video",
-          "Third significant takeaway"
-        ],
-        main_concepts: [
-          "Primary Concept",
-          "Secondary Concept",
-          "Related Theory"
-        ],
-        generated_at: new Date()
-      };
+      if (!videoDoc.exists()) {
+        throw new Error('Video not found');
+      }
 
-      // Save the summary to the video document
+      const videoData = videoDoc.data();
+      
+      // Check if transcription is available
+      if (!videoData.transcription || videoData.transcriptionStatus !== 'completed') {
+        throw new Error('Video transcription is not available');
+      }
+
+      // Call the Firebase Cloud Function
+      const functions = getFunctions();
+      const generateVideoSummary = httpsCallable(functions, 'generateVideoSummary');
+      
+      const result = await generateVideoSummary({ 
+        videoId,
+        transcription: videoData.transcription 
+      });
+      
+      const summary = result.data as VideoSummary;
+      
+      // Update the video document with the new summary
       await updateDoc(videoRef, {
-        summary: mockSummary
+        summary: {
+          ...summary,
+          generated_at: new Date()
+        }
       });
 
-      return mockSummary;
+      return summary;
     } catch (error) {
       console.error('Error generating video summary:', error);
       throw error;
