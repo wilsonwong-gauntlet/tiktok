@@ -27,7 +27,12 @@ interface GenerateVideoSummaryRequest {
 }
 
 export const generateVideoSummary = onCall(
-  {secrets: [openaiApiKey]},
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
   async (request: CallableRequest<GenerateVideoSummaryRequest>) => {
     try {
       const {videoId, transcription} = request.data;
@@ -38,12 +43,40 @@ export const generateVideoSummary = onCall(
         );
       }
 
-      logger.info("Generating summary for video:", videoId);
+      logger.info("Starting summary generation for video:", videoId);
+      logger.info("Transcription length:", transcription.length);
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        logger.error("OpenAI API key is not set");
+        throw new Error("OpenAI API key is not configured");
+      }
 
       // Initialize OpenAI client with the secret at runtime
       const openai = new OpenAI({
-        apiKey: openaiApiKey.value(),
+        apiKey: apiKey,
       });
+
+      logger.info("OpenAI client initialized");
+
+      // Verify API key by making a small test request
+      try {
+        await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [{role: "user", content: "test"}],
+          max_tokens: 1,
+        });
+        logger.info("OpenAI API key verified successfully");
+      } catch (error) {
+        logger.error("OpenAI API key verification failed:", error);
+        if (error instanceof OpenAI.APIError) {
+          if (error.status === 401) {
+            throw new Error("Invalid OpenAI API key");
+          }
+        }
+        throw error;
+      }
 
       // Prepare the prompt for GPT
       const prompt = [
@@ -57,6 +90,8 @@ export const generateVideoSummary = onCall(
         "1. Key Points: List the 3-5 most important points discussed",
         "2. Main Concepts: List 2-3 core concepts or theories mentioned",
       ].join("\n");
+
+      logger.info("Calling OpenAI API for summary generation...");
 
       // Call OpenAI API
       const completion = await openai.chat.completions.create({
@@ -76,6 +111,8 @@ export const generateVideoSummary = onCall(
         max_tokens: 1000,
       });
 
+      logger.info("Received response from OpenAI");
+
       // Process the response
       const response = completion.choices[0].message.content;
 
@@ -83,27 +120,39 @@ export const generateVideoSummary = onCall(
         throw new Error("Failed to get response from OpenAI");
       }
 
+      logger.info("Processing OpenAI response");
+
       // Parse the response into structured format
       const keyPointsMatch = response.match(
         /Key Points:[\s\S]*?(?=Main Concepts:|$)/i,
       );
       const mainConceptsMatch = response.match(/Main Concepts:[\s\S]*/i);
 
-      const keyPoints = keyPointsMatch ?
-        keyPointsMatch[0]
-          .replace(/Key Points:/i, "")
-          .split("\n")
-          .map((point) => point.replace(/^[•\-\d.]\s*/, "").trim())
-          .filter((point) => point.length > 0) :
-        [];
+      if (!keyPointsMatch || !mainConceptsMatch) {
+        logger.error("Failed to parse OpenAI response:", response);
+        throw new Error("Failed to parse OpenAI response format");
+      }
 
-      const mainConcepts = mainConceptsMatch ?
-        mainConceptsMatch[0]
-          .replace(/Main Concepts:/i, "")
-          .split("\n")
-          .map((concept) => concept.replace(/^[•\-\d.]\s*/, "").trim())
-          .filter((concept) => concept.length > 0) :
-        [];
+      const keyPoints = keyPointsMatch[0]
+        .replace(/Key Points:/i, "")
+        .split("\n")
+        .map((point) => point.replace(/^[•\-\d.]\s*/, "").trim())
+        .filter((point) => point.length > 0);
+
+      const mainConcepts = mainConceptsMatch[0]
+        .replace(/Main Concepts:/i, "")
+        .split("\n")
+        .map((concept) => concept.replace(/^[•\-\d.]\s*/, "").trim())
+        .filter((concept) => concept.length > 0);
+
+      if (keyPoints.length === 0 || mainConcepts.length === 0) {
+        logger.error("No key points or main concepts found in response:", {
+          response,
+          keyPoints,
+          mainConcepts,
+        });
+        throw new Error("Failed to extract key points or main concepts");
+      }
 
       const summary: VideoSummary = {
         key_points: keyPoints,
@@ -115,8 +164,23 @@ export const generateVideoSummary = onCall(
 
       return summary;
     } catch (error) {
-      logger.error("Error generating summary:", error);
-      throw new Error("Failed to generate video summary");
+      logger.error("Error in generateVideoSummary:", error);
+      if (error instanceof OpenAI.APIError) {
+        logger.error("OpenAI API Error:", {
+          status: error.status,
+          message: error.message,
+          type: error.type,
+        });
+        // Provide more specific error messages based on OpenAI error types
+        if (error.status === 401) {
+          throw new Error("Authentication error: Invalid OpenAI API key");
+        } else if (error.status === 429) {
+          throw new Error("Rate limit exceeded: Too many requests to OpenAI");
+        } else if (error.status === 500) {
+          throw new Error("OpenAI service error: Please try again later");
+        }
+      }
+      throw error;
     }
   },
 );

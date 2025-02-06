@@ -254,16 +254,19 @@ export class VideoService {
         throw new Error('Video transcription is not available');
       }
 
-      // Call the Firebase Cloud Function
+      // Call the Cloud Function
       const functions = getFunctions();
-      const generateVideoSummary = httpsCallable(functions, 'generateVideoSummary');
+      const generateVideoSummary = httpsCallable<
+        { videoId: string; transcription: string },
+        VideoSummary
+      >(functions, 'generateVideoSummary');
       
       const result = await generateVideoSummary({ 
         videoId,
         transcription: videoData.transcription 
       });
       
-      const summary = result.data as VideoSummary;
+      const summary = result.data;
       
       // Update the video document with the new summary
       await updateDoc(videoRef, {
@@ -545,6 +548,26 @@ export class VideoService {
       console.log(`\nCleanup complete. Removed ${deletedCount} invalid video documents`);
     } catch (error) {
       console.error('Error validating videos:', error);
+      throw error;
+    }
+  }
+
+  static async clearSummaries() {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const snapshot = await getDocs(videosRef);
+      
+      const clearPromises = snapshot.docs.map(async (doc) => {
+        await updateDoc(doc.ref, {
+          summary: null,
+          aiSummary: null // Clear the old field as well
+        });
+      });
+
+      await Promise.all(clearPromises);
+      console.log('Cleared all summaries successfully');
+    } catch (error) {
+      console.error('Error clearing summaries:', error);
       throw error;
     }
   }
