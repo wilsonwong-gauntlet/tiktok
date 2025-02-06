@@ -66,6 +66,8 @@ export default function SubjectDetailScreen() {
   const [filteredSavedVideos, setFilteredSavedVideos] = useState<Video[]>([]);
   const [notes, setNotes] = useState<{[key: string]: Note}>({});
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [expandedSummaryRows, setExpandedSummaryRows] = useState<Set<string>>(new Set());
+  const [expandedReflectionRows, setExpandedReflectionRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -435,146 +437,285 @@ export default function SubjectDetailScreen() {
     </View>
   );
 
-  const renderSummariesTab = () => (
-    <View style={styles.summariesContainer}>
-      {loadingSummaries ? (
-        <ActivityIndicator size="large" color="#fff" />
-      ) : (
-        Object.entries(summaries).map(([videoId, summary]) => {
-          const video = videos.find(v => v.id === videoId);
-          if (!video || !summary) return null;
+  const renderSummariesTab = () => {
+    const toggleSummaryRow = (videoId: string) => {
+      const newExpanded = new Set(expandedSummaryRows);
+      if (newExpanded.has(videoId)) {
+        newExpanded.delete(videoId);
+      } else {
+        newExpanded.add(videoId);
+      }
+      setExpandedSummaryRows(newExpanded);
+    };
 
-          return (
-            <View key={videoId} style={styles.summaryCard}>
-              <TouchableOpacity 
-                style={styles.summaryHeader}
-                onPress={() => router.push(`/video/${videoId}`)}
-              >
-                <VideoThumbnail video={video} />
-                <Text style={styles.summaryTitle}>{video.title}</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.summaryContent}>
-                <Text style={styles.summarySubtitle}>Key Points</Text>
-                {summary.key_points.map((point, index) => (
-                  <View key={index} style={styles.bulletPoint}>
-                    <Text style={styles.bulletDot}>•</Text>
-                    <Text style={styles.summaryText}>{point}</Text>
-                  </View>
-                ))}
-
-                <Text style={[styles.summarySubtitle, { marginTop: 16 }]}>
-                  Main Concepts
-                </Text>
-                {summary.main_concepts.map((concept, index) => (
-                  <View key={index} style={styles.bulletPoint}>
-                    <Text style={styles.bulletDot}>•</Text>
-                    <Text style={styles.summaryText}>{concept}</Text>
-                  </View>
-                ))}
+    return (
+      <View style={styles.summariesContainer}>
+        {loadingSummaries ? (
+          <ActivityIndicator size="large" color="#fff" />
+        ) : (
+          <View style={styles.tableContainer}>
+            <View style={styles.tableHeader}>
+              <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+                <Text style={styles.tableHeaderText}>Video Title</Text>
+              </View>
+              <View style={styles.tableHeaderCell}>
+                <Text style={styles.tableHeaderText}>Points</Text>
               </View>
             </View>
-          );
-        })
-      )}
-      {!loadingSummaries && Object.keys(summaries).length === 0 && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No summaries available yet</Text>
-        </View>
-      )}
-    </View>
-  );
+
+            <ScrollView style={styles.tableContent}>
+              {Object.entries(summaries).map(([videoId, summary]) => {
+                const video = videos.find(v => v.id === videoId);
+                if (!video || !summary) return null;
+
+                const isExpanded = expandedSummaryRows.has(videoId);
+
+                return (
+                  <View key={videoId} style={styles.tableRowContainer}>
+                    <TouchableOpacity 
+                      style={styles.tableRow}
+                      onPress={() => toggleSummaryRow(videoId)}
+                    >
+                      <View style={[styles.tableCell, { flex: 1 }]}>
+                        <Text style={styles.tableCellTitle} numberOfLines={2}>
+                          {video.title}
+                        </Text>
+                      </View>
+                      <View style={[styles.tableCell, { width: 80, alignItems: 'center' }]}>
+                        <Text style={styles.tableCellText}>
+                          {summary.key_points.length} points
+                        </Text>
+                      </View>
+                      <Ionicons 
+                        name={isExpanded ? "chevron-up" : "chevron-down"} 
+                        size={20} 
+                        color="#666" 
+                        style={{ marginLeft: 8 }}
+                      />
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View style={styles.expandedContent}>
+                        <View style={styles.expandedSection}>
+                          <Text style={styles.expandedTitle}>Key Points</Text>
+                          {summary.key_points.map((point, index) => (
+                            <View key={index} style={styles.bulletPoint}>
+                              <Text style={styles.bulletDot}>•</Text>
+                              <Text style={styles.bulletText}>{point}</Text>
+                            </View>
+                          ))}
+                        </View>
+
+                        <View style={styles.expandedSection}>
+                          <Text style={styles.expandedTitle}>Main Concepts</Text>
+                          <View style={styles.expandedConceptTags}>
+                            {summary.main_concepts.map((concept, index) => (
+                              <View key={index} style={styles.conceptTag}>
+                                <Text style={styles.conceptTagText}>{concept}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+
+                        <TouchableOpacity 
+                          style={styles.watchButton}
+                          onPress={() => router.push(`/video/${videoId}`)}
+                        >
+                          <Ionicons name="play-circle-outline" size={20} color="#fff" />
+                          <Text style={styles.watchButtonText}>Watch Video</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+        {!loadingSummaries && Object.keys(summaries).length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No summaries available yet</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderReflectionsTab = () => {
+    const toggleReflectionRow = (videoId: string) => {
+      const newExpanded = new Set(expandedReflectionRows);
+      if (newExpanded.has(videoId)) {
+        newExpanded.delete(videoId);
+      } else {
+        newExpanded.add(videoId);
+      }
+      setExpandedReflectionRows(newExpanded);
+    };
+
+    return (
+      <View style={styles.reflectionsContainer}>
+        {loadingNotes ? (
+          <ActivityIndicator size="large" color="#fff" />
+        ) : Object.entries(notes).length > 0 ? (
+          <View style={styles.tableContainer}>
+            <View style={styles.tableHeader}>
+              <View style={[styles.tableHeaderCell, { flex: 2 }]}>
+                <Text style={styles.tableHeaderText}>Video Title</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+                <Text style={styles.tableHeaderText}>Understanding</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+                <Text style={styles.tableHeaderText}>Last Updated</Text>
+              </View>
+            </View>
+
+            <ScrollView style={styles.tableContent}>
+              {Object.entries(notes).map(([videoId, note]) => {
+                const video = videos.find(v => v.id === videoId);
+                if (!video) return null;
+
+                const reflectionTypes = ['gaps', 'applications', 'connections'] as const;
+                const isExpanded = expandedReflectionRows.has(videoId);
+
+                return (
+                  <View key={videoId} style={styles.tableRowContainer}>
+                    <TouchableOpacity 
+                      style={styles.tableRow}
+                      onPress={() => toggleReflectionRow(videoId)}
+                    >
+                      <View style={[styles.tableCell, { flex: 2 }]}>
+                        <Text style={styles.tableCellTitle} numberOfLines={2}>
+                          {video.title}
+                        </Text>
+                      </View>
+                      <View style={[styles.tableCell, { flex: 1 }]}>
+                        <View style={styles.reflectionStats}>
+                          <Text style={styles.tableCellText}>
+                            {note.reflections.understanding.length} points
+                          </Text>
+                          <View style={styles.reflectionIndicators}>
+                            {reflectionTypes.map(type => (
+                              <View 
+                                key={type}
+                                style={[
+                                  styles.indicator,
+                                  note.reflections[type].length > 0 && styles.indicatorActive
+                                ]}
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                      <View style={[styles.tableCell, { flex: 1 }]}>
+                        <Text style={styles.tableCellText}>
+                          {note.updatedAt.toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Ionicons 
+                        name={isExpanded ? "chevron-up" : "chevron-down"} 
+                        size={20} 
+                        color="#666" 
+                      />
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View style={styles.expandedContent}>
+                        {note.content && (
+                          <View style={styles.expandedSection}>
+                            <Text style={styles.expandedTitle}>Quick Capture</Text>
+                            <Text style={styles.expandedText}>{note.content}</Text>
+                          </View>
+                        )}
+
+                        {note.keyTakeaways?.length > 0 && (
+                          <View style={styles.expandedSection}>
+                            <Text style={styles.expandedTitle}>Key Takeaways</Text>
+                            {note.keyTakeaways.map((point, index) => (
+                              <View key={index} style={styles.bulletPoint}>
+                                <Text style={styles.bulletDot}>•</Text>
+                                <Text style={styles.bulletText}>{point}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        <View style={styles.expandedSection}>
+                          <Text style={styles.expandedTitle}>Understanding</Text>
+                          {note.reflections.understanding.map((item, index) => (
+                            <View key={index} style={styles.bulletPoint}>
+                              <Text style={styles.bulletDot}>•</Text>
+                              <Text style={styles.bulletText}>{item}</Text>
+                            </View>
+                          ))}
+                        </View>
+
+                        {reflectionTypes.map(type => (
+                          note.reflections[type].length > 0 && (
+                            <View key={type} style={styles.expandedSection}>
+                              <Text style={styles.expandedTitle}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                              </Text>
+                              {note.reflections[type].map((item, index) => (
+                                <View key={index} style={styles.bulletPoint}>
+                                  <Text style={styles.bulletDot}>•</Text>
+                                  <Text style={styles.bulletText}>{item}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )
+                        ))}
+
+                        <TouchableOpacity 
+                          style={styles.watchButton}
+                          onPress={() => router.push(`/video/${videoId}`)}
+                        >
+                          <Ionicons name="play-circle-outline" size={20} color="#fff" />
+                          <Text style={styles.watchButtonText}>Watch Video</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="journal-outline" size={48} color="#666" />
+            <Text style={styles.emptyTitle}>No Reflections Yet</Text>
+            <Text style={styles.emptyText}>
+              Start watching videos and add your reflections to track your learning journey
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderQuizzesTab = () => (
     <View style={styles.quizzesContainer}>
-      <View style={styles.comingSoon}>
-        <Ionicons name="school-outline" size={48} color="#666" />
-        <Text style={styles.comingSoonTitle}>Quizzes Coming Soon</Text>
-        <Text style={styles.comingSoonText}>
-          Test your knowledge with interactive quizzes for each video and concept
-        </Text>
-      </View>
-    </View>
-  );
-
-  const renderReflectionSection = (title: string, items: string[]) => (
-    <View style={styles.reflectionSection}>
-      <Text style={styles.reflectionTitle}>{title}</Text>
-      {items.length > 0 ? (
-        items.map((item, index) => (
-          <View key={index} style={styles.reflectionItem}>
-            <Text style={styles.bulletDot}>•</Text>
-            <Text style={styles.reflectionText}>{item}</Text>
+      <View style={styles.tableContainer}>
+        <View style={styles.tableHeader}>
+          <View style={[styles.tableHeaderCell, { flex: 2 }]}>
+            <Text style={styles.tableHeaderText}>Quiz Title</Text>
           </View>
-        ))
-      ) : (
-        <Text style={styles.emptyText}>No {title.toLowerCase()} added yet</Text>
-      )}
-    </View>
-  );
+          <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+            <Text style={styles.tableHeaderText}>Status</Text>
+          </View>
+          <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+            <Text style={styles.tableHeaderText}>Score</Text>
+          </View>
+        </View>
 
-  const renderReflectionsTab = () => (
-    <View style={styles.reflectionsContainer}>
-      {loadingNotes ? (
-        <ActivityIndicator size="large" color="#fff" />
-      ) : Object.entries(notes).length > 0 ? (
-        Object.entries(notes).map(([videoId, note]) => {
-          const video = videos.find(v => v.id === videoId);
-          if (!video) return null;
-
-          return (
-            <View key={videoId} style={styles.reflectionCard}>
-              <TouchableOpacity 
-                style={styles.reflectionHeader}
-                onPress={() => router.push(`/video/${videoId}`)}
-              >
-                <VideoThumbnail video={video} />
-                <Text style={styles.reflectionVideoTitle}>{video.title}</Text>
-              </TouchableOpacity>
-
-              <View style={styles.reflectionContent}>
-                {note.content && (
-                  <View style={styles.quickCapture}>
-                    <Text style={styles.reflectionSubtitle}>Quick Capture</Text>
-                    <Text style={styles.reflectionText}>{note.content}</Text>
-                  </View>
-                )}
-
-                {note.keyTakeaways?.length > 0 && (
-                  <View style={styles.keyTakeaways}>
-                    <Text style={styles.reflectionSubtitle}>Key Takeaways</Text>
-                    {note.keyTakeaways.map((point, index) => (
-                      <View key={index} style={styles.reflectionItem}>
-                        <Text style={styles.bulletDot}>•</Text>
-                        <Text style={styles.reflectionText}>{point}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                <View style={styles.reflectionsGrid}>
-                  {renderReflectionSection('Understanding', note.reflections.understanding)}
-                  {renderReflectionSection('Gaps', note.reflections.gaps)}
-                  {renderReflectionSection('Applications', note.reflections.applications)}
-                  {renderReflectionSection('Connections', note.reflections.connections)}
-                </View>
-
-                <Text style={styles.updatedAt}>
-                  Last updated: {note.updatedAt.toLocaleDateString()}
-                </Text>
-              </View>
-            </View>
-          );
-        })
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="journal-outline" size={48} color="#666" />
-          <Text style={styles.emptyTitle}>No Reflections Yet</Text>
-          <Text style={styles.emptyText}>
-            Start watching videos and add your reflections to track your learning journey
+        <View style={styles.comingSoon}>
+          <Ionicons name="school-outline" size={48} color="#666" />
+          <Text style={styles.comingSoonTitle}>Quizzes Coming Soon</Text>
+          <Text style={styles.comingSoonText}>
+            Test your knowledge with interactive quizzes for each video and concept
           </Text>
         </View>
-      )}
+      </View>
     </View>
   );
 
@@ -869,45 +1010,67 @@ const styles = StyleSheet.create({
   summariesContainer: {
     gap: 16,
   },
-  summaryCard: {
+  tableContainer: {
+    flex: 1,
     backgroundColor: '#222',
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
   },
-  summaryHeader: {
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#333',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
+  },
+  tableHeaderCell: {
+    paddingHorizontal: 8,
+  },
+  tableHeaderText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tableContent: {
+    flex: 1,
+  },
+  tableRow: {
+    flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
-  },
-  summaryTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
     padding: 12,
   },
-  summaryContent: {
-    padding: 16,
+  tableCell: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
   },
-  summarySubtitle: {
+  tableCellTitle: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontWeight: '500',
   },
-  bulletPoint: {
+  tableCellText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  conceptTags: {
     flexDirection: 'row',
-    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  bulletDot: {
+  conceptTag: {
+    backgroundColor: '#1a472a',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  conceptTagText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  moreText: {
     color: '#666',
-    marginRight: 8,
-    fontSize: 14,
-  },
-  summaryText: {
-    color: '#ccc',
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
+    fontSize: 12,
   },
   quizzesContainer: {
     flex: 1,
@@ -936,66 +1099,22 @@ const styles = StyleSheet.create({
   reflectionsContainer: {
     gap: 16,
   },
-  reflectionCard: {
-    backgroundColor: '#222',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
+  reflectionStats: {
+    alignItems: 'center',
   },
-  reflectionHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  reflectionVideoTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    padding: 12,
-  },
-  reflectionContent: {
-    padding: 16,
-  },
-  quickCapture: {
-    marginBottom: 16,
-  },
-  keyTakeaways: {
-    marginBottom: 16,
-  },
-  reflectionSubtitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  reflectionsGrid: {
-    gap: 16,
-  },
-  reflectionSection: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 12,
-  },
-  reflectionTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  reflectionItem: {
+  reflectionIndicators: {
     flexDirection: 'row',
-    marginBottom: 4,
+    gap: 4,
+    marginTop: 4,
   },
-  reflectionText: {
-    color: '#ccc',
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#333',
   },
-  updatedAt: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 12,
-    textAlign: 'right',
+  indicatorActive: {
+    backgroundColor: '#1a472a',
   },
   emptyTitle: {
     color: '#fff',
@@ -1040,5 +1159,63 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     marginLeft: 4,
+  },
+  tableRowContainer: {
+    backgroundColor: '#222',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  expandedContent: {
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+  },
+  expandedSection: {
+    marginBottom: 16,
+  },
+  expandedTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  expandedText: {
+    color: '#ccc',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  expandedConceptTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bulletPoint: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  bulletDot: {
+    color: '#666',
+    marginRight: 8,
+    fontSize: 14,
+  },
+  bulletText: {
+    color: '#ccc',
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  watchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a472a',
+    padding: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  watchButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 
