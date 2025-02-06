@@ -240,21 +240,40 @@ async function initializeSubjects() {
       batch.delete(doc.ref);
     });
 
-    // Add new sample subjects
-    sampleSubjects.forEach(subject => {
-      const docRef = subjectsRef.doc();
-      batch.set(docRef, {
+    // Add new sample subjects and their concepts
+    for (const subject of sampleSubjects) {
+      // Create the subject document
+      const subjectRef = subjectsRef.doc();
+      const subjectData = {
         ...subject,
         searchableText: [
           subject.name?.toLowerCase(),
           ...subject.description?.toLowerCase().split(' ') || [],
           ...subject.concepts?.map(c => c.name.toLowerCase()) || []
         ]
-      });
-    });
+      };
+      
+      // Remove concepts from the main document as they'll be in a subcollection
+      const { concepts, ...subjectWithoutConcepts } = subjectData;
+      batch.set(subjectRef, subjectWithoutConcepts);
+
+      // Add concepts as a subcollection
+      if (concepts) {
+        for (const concept of concepts) {
+          const conceptRef = subjectRef.collection('concepts').doc(concept.id);
+          batch.set(conceptRef, {
+            name: concept.name,
+            description: concept.description,
+            status: concept.status,
+            prerequisites: concept.prerequisites,
+            subjectId: subjectRef.id // Add reference to parent subject
+          });
+        }
+      }
+    }
 
     await batch.commit();
-    console.log('Successfully initialized subjects');
+    console.log('Successfully initialized subjects and concepts');
     process.exit(0);
   } catch (error) {
     console.error('Error initializing subjects:', error);

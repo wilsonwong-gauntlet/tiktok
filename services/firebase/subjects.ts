@@ -9,7 +9,7 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from './index';
-import { Subject, UserProgress } from '../../types/video';
+import { Subject, UserProgress, Concept } from '../../types/video';
 
 const SUBJECTS_COLLECTION = 'subjects';
 const USER_PROGRESS_COLLECTION = 'userProgress';
@@ -55,6 +55,7 @@ export class SubjectService {
 
   static async getSubjectById(subjectId: string, userId: string): Promise<Subject | null> {
     try {
+      // Get main subject document
       const subjectRef = doc(db, SUBJECTS_COLLECTION, subjectId);
       const subjectDoc = await getDoc(subjectRef);
       
@@ -62,9 +63,29 @@ export class SubjectService {
         return null;
       }
 
+      // Get concepts from subcollection
+      const conceptsRef = collection(db, `${SUBJECTS_COLLECTION}/${subjectId}/concepts`);
+      const conceptsSnapshot = await getDocs(conceptsRef);
+      const concepts = conceptsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Concept[];
+
+      // Get the main subject data including knowledge graph
+      const subjectData = subjectDoc.data();
       const subject = {
         id: subjectDoc.id,
-        ...subjectDoc.data()
+        name: subjectData.name,
+        description: subjectData.description,
+        prerequisites: subjectData.prerequisites || [],
+        videosCount: subjectData.videosCount || 0,
+        completedVideos: 0,
+        knowledgeGraph: subjectData.knowledgeGraph || {
+          nodes: [],
+          edges: []
+        },
+        concepts,
+        progress: 0
       } as Subject;
 
       // Get user progress for this subject
@@ -72,11 +93,24 @@ export class SubjectService {
       const userProgressDoc = await getDoc(userProgressRef);
       const userProgress = userProgressDoc.data() as UserProgress;
 
-      return {
-        ...subject,
-        progress: userProgress?.subjects[subjectId]?.progress || 0,
-        completedVideos: userProgress?.subjects[subjectId]?.completedVideos?.length || 0
-      };
+      // Merge with user progress
+      if (userProgress?.subjects[subjectId]) {
+        const subjectProgress = userProgress.subjects[subjectId];
+        subject.progress = subjectProgress.progress || 0;
+        subject.completedVideos = subjectProgress.completedVideos?.length || 0;
+        
+        // Update concept status based on mastered concepts
+        if (subjectProgress.masteredConcepts) {
+          subject.concepts = subject.concepts.map(concept => ({
+            ...concept,
+            status: subjectProgress.masteredConcepts.includes(concept.id) 
+              ? 'mastered' 
+              : concept.status
+          }));
+        }
+      }
+
+      return subject;
     } catch (error) {
       console.error('Error fetching subject:', error);
       throw error;

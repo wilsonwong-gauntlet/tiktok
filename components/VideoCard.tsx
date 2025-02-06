@@ -239,7 +239,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
                   onPress={() => router.push(`/concept/${conceptId}`)}
                 >
                   <Text style={styles.conceptText}>
-                    {subject?.concepts.find(c => c.id === conceptId)?.name || `Concept ${index + 1}`}
+                    {subject?.concepts?.find(c => c.id === conceptId)?.name || `Concept ${index + 1}`}
                   </Text>
                 </TouchableOpacity>
               ))}

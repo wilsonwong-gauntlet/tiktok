@@ -5,9 +5,10 @@ import ffmpeg from 'fluent-ffmpeg';
 import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { uploadLocalVideo } from './video-service';
 import { config } from 'dotenv';
-import { db } from './firebase-admin';
+import { db, storage } from './firebase-admin';
 import { VideoService } from '../services/firebase/video';
 import * as admin from 'firebase-admin';
+import { Video } from '../types/video';
 
 // Load environment variables
 config({ path: join(__dirname, '..', '.env.local') });
@@ -119,6 +120,20 @@ async function convertToMp4(inputPath: string): Promise<string> {
   });
 }
 
+interface Subject {
+  id: string;
+  name: string;
+}
+
+interface Concept {
+  id: string;
+  name: string;
+}
+
+interface LocalVideoUpload extends VideoUpload {
+  searchableText: string[];
+}
+
 interface VideoUpload {
   filePath: string;
   thumbnailPath: string;
@@ -130,34 +145,115 @@ interface VideoUpload {
   tags: string[];
   authorId: string;
   authorName: string;
+  searchableText?: string[]; // Make searchableText optional
+}
+
+async function listSubjects(): Promise<Subject[]> {
+  const snapshot = await db.collection('subjects').get();
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    name: doc.data().name
+  }));
+}
+
+async function listConcepts(subjectId: string): Promise<Concept[]> {
+  const snapshot = await db.collection('subjects').doc(subjectId).collection('concepts').get();
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    name: doc.data().name
+  }));
 }
 
 async function uploadVideo(videoData: VideoUpload) {
   try {
-    // Upload video and get video ID
-    const videoId = await VideoService.uploadLocalVideo({
-      ...videoData,
-      searchableText: [
-        ...videoData.title.toLowerCase().split(' '),
-        ...videoData.description.toLowerCase().split(' '),
-        ...videoData.tags.map(tag => tag.toLowerCase())
-      ]
+    // Create searchableText from existing data
+    const searchableText = [
+      ...videoData.title.toLowerCase().split(' '),
+      ...videoData.description.toLowerCase().split(' '),
+      ...videoData.tags.map(tag => tag.toLowerCase())
+    ];
+
+    // Upload video file to Storage
+    const videoFileName = `videos/${Date.now()}-${basename(videoData.filePath)}`;
+    const thumbnailFileName = `thumbnails/${Date.now()}-${basename(videoData.thumbnailPath)}`;
+    
+    // Upload video
+    await storage.upload(videoData.filePath, {
+      destination: videoFileName,
+      metadata: {
+        contentType: 'video/mp4'
+      }
+    });
+    
+    // Upload thumbnail
+    await storage.upload(videoData.thumbnailPath, {
+      destination: thumbnailFileName,
+      metadata: {
+        contentType: 'image/jpeg'
+      }
     });
 
-    // Update subject's video counts
+    // Get download URLs
+    const [videoFile] = await storage.file(videoFileName).get();
+    const [thumbnailFile] = await storage.file(thumbnailFileName).get();
+    const videoUrl = await videoFile.getSignedUrl({ action: 'read', expires: '03-01-2500' });
+    const thumbnailUrl = await thumbnailFile.getSignedUrl({ action: 'read', expires: '03-01-2500' });
+
+    // Create video document in Firestore
+    const videoDoc = {
+      title: videoData.title,
+      description: videoData.description,
+      url: videoUrl[0],
+      thumbnailUrl: thumbnailUrl[0],
+      duration: 0, // TODO: Get video duration
+      createdAt: new Date(),
+      subjectId: videoData.subjectId,
+      conceptIds: videoData.conceptIds,
+      relatedSubjects: videoData.relatedSubjects || [],
+      tags: videoData.tags,
+      searchableText,
+      viewCount: 0,
+      authorId: videoData.authorId,
+      authorName: videoData.authorName,
+      format: 'video/mp4'
+    };
+
+    // Add to Firestore
+    const docRef = await db.collection('videos').add(videoDoc);
+    const videoId = docRef.id;
+
+    // Get the subject document and its concepts
     const subjectRef = db.collection('subjects').doc(videoData.subjectId);
+    const subjectDoc = await subjectRef.get();
+    const subjectData = subjectDoc.data();
+
+    // Get all concepts for this subject
+    const conceptsSnapshot = await subjectRef.collection('concepts').get();
+    const concepts = conceptsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Update subject with concepts and video counts
     await subjectRef.update({
       videosCount: admin.firestore.FieldValue.increment(1),
-      primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
+      primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId),
+      concepts: concepts // Ensure concepts array is present in subject document
     });
 
     // Update concepts' video lists
     const batch = db.batch();
     for (const conceptId of videoData.conceptIds) {
-      const conceptRef = db.collection('concepts').doc(conceptId);
-      batch.update(conceptRef, {
-        primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
-      });
+      const conceptRef = subjectRef.collection('concepts').doc(conceptId);
+      const conceptDoc = await conceptRef.get();
+      
+      if (conceptDoc.exists) {
+        batch.update(conceptRef, {
+          primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
+        });
+      } else {
+        console.warn(`Concept ${conceptId} not found in subject ${videoData.subjectId}`);
+      }
     }
     await batch.commit();
 
@@ -167,6 +263,72 @@ async function uploadVideo(videoData: VideoUpload) {
     console.error('Error uploading video:', error);
     throw error;
   }
+}
+
+async function processVideoUpload(filePath: string, commonMetadata?: { category: string; commonTags: string[] }) {
+  // Generate thumbnail
+  console.log(`Generating thumbnail for ${filePath}...`);
+  const thumbnailPath = await generateThumbnail(filePath);
+
+  // Convert video to MP4 if needed
+  console.log('Converting video to MP4...');
+  const mp4Path = await convertToMp4(filePath);
+
+  // Get video metadata from user input
+  const title = await question('Enter video title: ');
+  const description = await question('Enter video description: ');
+  
+  // Get subject and concepts
+  console.log('\nAvailable subjects:');
+  const subjects = await listSubjects();
+  subjects.forEach((s, i) => console.log(`${i + 1}. ${s.name}`));
+  
+  const subjectIndex = parseInt(await question('Select subject (enter number): ')) - 1;
+  if (subjectIndex < 0 || subjectIndex >= subjects.length) {
+    throw new Error('Invalid subject selection');
+  }
+  const selectedSubject = subjects[subjectIndex];
+  
+  console.log('\nAvailable concepts for selected subject:');
+  const concepts = await listConcepts(selectedSubject.id);
+  concepts.forEach((c, i) => console.log(`${i + 1}. ${c.name}`));
+  
+  const conceptInput = await question('Select concepts (comma-separated numbers): ');
+  const conceptIndices = conceptInput.split(',')
+    .map(i => parseInt(i.trim()) - 1)
+    .filter(i => i >= 0 && i < concepts.length);
+  
+  if (conceptIndices.length === 0) {
+    throw new Error('No valid concepts selected');
+  }
+  
+  const conceptIds = conceptIndices.map(i => concepts[i].id);
+
+  // Get tags
+  const specificTags = (await question('\nEnter specific tags for this video (comma-separated): '))
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(Boolean);
+
+  const tags = [...new Set([
+    ...(commonMetadata?.commonTags || []),
+    ...specificTags
+  ])];
+
+  // Create video upload data
+  const videoData: VideoUpload = {
+    filePath: mp4Path,
+    thumbnailPath,
+    title,
+    description,
+    subjectId: selectedSubject.id,
+    conceptIds,
+    tags,
+    authorId: 'sample-author',
+    authorName: 'AI Learning Channel'
+  };
+
+  return await uploadVideo(videoData);
 }
 
 async function main() {
@@ -184,7 +346,7 @@ async function main() {
 
     const results = [];
     for (const filePath of filePaths) {
-      const result = await uploadVideo(filePath, commonMetadata);
+      const result = await processVideoUpload(filePath, commonMetadata);
       results.push({ filePath, success: !!result, videoId: result });
     }
 

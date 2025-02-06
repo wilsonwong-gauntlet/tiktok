@@ -12,7 +12,7 @@ const serviceAccount = require('../config/firebase/service-account.json');
 
 const app = initializeApp({
   credential: cert(serviceAccount),
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "tiktok-3142f.firebasestorage.app"
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
 });
 
 // Initialize Firestore
@@ -20,6 +20,10 @@ export const db = getFirestore();
 
 // Initialize Storage
 export const storage = getStorage().bucket();
+
+// Export admin for FieldValue
+import * as admin from 'firebase-admin';
+export { admin };
 
 // No need for auth initialization since Admin SDK has full access
 export async function initializeAuth() {

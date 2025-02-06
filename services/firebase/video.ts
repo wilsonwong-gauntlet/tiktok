@@ -174,7 +174,9 @@ export class VideoService {
           },
           viewCount: 0,
           authorId: 'sample-author',
-          authorName: 'AI Learning Channel'
+          authorName: 'AI Learning Channel',
+          subjectId: 'VRtalTBPzBiqRkFeEilq',
+          conceptIds: ['sys-001', 'sys-002']
         },
         {
           title: 'Understanding Quantum Computing',
@@ -208,7 +210,9 @@ export class VideoService {
           ],
           viewCount: 0,
           authorId: 'sample-author',
-          authorName: 'Quantum Physics Explained'
+          authorName: 'Quantum Physics Explained',
+          subjectId: 'VRtalTBPzBiqRkFeEilq',
+          conceptIds: ['sys-002', 'sys-003']
         }
       ];
 
