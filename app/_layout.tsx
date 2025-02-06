@@ -4,6 +4,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter, useSegments } from 'expo-router';
 import { auth } from '../services/firebase/index';
 import { VideoSaveProvider } from '../contexts/VideoSaveContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StyleSheet } from 'react-native';
 
 export default function RootLayout() {
   const segments = useSegments();
@@ -26,11 +28,19 @@ export default function RootLayout() {
   }, [segments]);
 
   return (
-    <VideoSaveProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(app)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" />
-      </Stack>
-    </VideoSaveProvider>
+    <GestureHandlerRootView style={styles.container}>
+      <VideoSaveProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+          <Stack.Screen name="login" />
+        </Stack>
+      </VideoSaveProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

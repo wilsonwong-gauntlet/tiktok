@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
-const HEADER_HEIGHT = 47; // Standard header height
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -34,6 +33,9 @@ export default function Home() {
       const index = feedState.videos.findIndex(v => v.id === videoId);
       if (index !== -1) {
         setCurrentIndex(index);
+      } else {
+        // If video is not in current feed, load it specifically
+        loadVideoById(videoId);
       }
     }
   }, [videoId, feedState.videos]);
@@ -61,6 +63,21 @@ export default function Home() {
     }
   };
 
+  const loadVideoById = async (id: string) => {
+    try {
+      const video = await VideoService.fetchVideoById(id);
+      if (video) {
+        setFeedState(prev => ({
+          ...prev,
+          videos: [video, ...prev.videos],
+        }));
+        setCurrentIndex(0);
+      }
+    } catch (error) {
+      console.error('Error loading video:', error);
+    }
+  };
+
   const handleAddSampleVideos = async () => {
     try {
       await VideoService.addSampleVideos();
@@ -77,9 +94,14 @@ export default function Home() {
     changed: ViewToken[];
   }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+      console.log('Active video changed:', {
+        previousIndex: currentIndex,
+        newIndex: viewableItems[0].index,
+        videoId: viewableItems[0].item?.id
+      });
       setCurrentIndex(viewableItems[0].index);
     }
-  }, []);
+  }, [currentIndex]);
 
   const viewabilityConfig = React.useMemo(() => ({
     itemVisiblePercentThreshold: 50

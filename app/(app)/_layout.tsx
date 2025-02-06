@@ -12,6 +12,20 @@ export default function AppLayout() {
           presentation: 'modal'
         }} 
       />
+      <Stack.Screen 
+        name="concept/[id]" 
+        options={{
+          headerShown: false,
+          presentation: 'modal'
+        }} 
+      />
+      <Stack.Screen 
+        name="video/[id]" 
+        options={{
+          headerShown: false,
+          presentation: 'modal'
+        }} 
+      />
     </Stack>
   );
 } 
