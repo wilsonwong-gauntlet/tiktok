@@ -147,4 +147,65 @@ export interface Comment {
   createdAt: Date;
   likes: number;
   replies?: Comment[];
+}
+
+export interface GraphData {
+  nodes: Array<{
+    id: string;
+    label: string;
+    type: 'concept' | 'prerequisite';
+  }>;
+  edges: Array<{
+    source: string;
+    target: string;
+  }>;
+}
+
+export interface Concept {
+  id: string;
+  name: string;
+  description: string;
+  status: 'not_started' | 'in_progress' | 'mastered';
+  prerequisites: string[];
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  description: string;
+  progress: number;
+  concepts: Concept[];
+  prerequisites: string[];
+  videosCount: number;
+  completedVideos: number;
+  knowledgeGraph: GraphData;
+}
+
+export interface Reflection {
+  id: string;
+  content: string;
+  timestamp: Date;
+  conceptId: string;
+}
+
+export interface UserProgress {
+  userId: string;
+  subjects: {
+    [subjectId: string]: {
+      progress: number;
+      lastActivity: Date;
+      completedVideos: string[];
+      masteredConcepts: string[];
+      quizScores: {
+        [quizId: string]: number;
+      };
+      reflections: Reflection[];
+    }
+  };
+  learningStreak: number;
+  totalStudyTime: number;
+  weeklyGoals: {
+    target: number;
+    achieved: number;
+  };
 } 

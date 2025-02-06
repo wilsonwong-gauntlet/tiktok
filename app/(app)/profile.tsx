@@ -7,7 +7,6 @@ import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { fetchSavedVideos } from '../../services/firebase/index';
 import { Video, LearningConcept } from '../../types/video';
-import LearningDashboard from '../../components/LearningDashboard';
 
 export default function Profile() {
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
@@ -69,13 +68,6 @@ export default function Profile() {
             <Ionicons name="person-circle" size={80} color="#fff" />
           </View>
           <Text style={styles.email}>{auth.currentUser?.email}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Learning Progress</Text>
-          <View style={styles.progressContainer}>
-            <LearningDashboard onConceptSelect={handleConceptSelect} />
-          </View>
         </View>
 
         <View style={styles.section}>

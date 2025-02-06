@@ -1,585 +1,285 @@
-import { useLocalSearchParams, Stack, router } from 'expo-router';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Dimensions,
+import React, { useEffect, useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
   TouchableOpacity,
-  ViewToken,
-  Platform,
-  Image,
+  ActivityIndicator
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SUBJECT_DATA, MainSubject } from '../../../types/subject';
-import { Video } from '../../../types/video';
-import { VideoService } from '../../../services/firebase/video';
-import VideoCard from '../../../components/VideoCard';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { QueryDocumentSnapshot } from 'firebase/firestore';
-import { auth, fetchSavedVideos } from '../../../services/firebase/index';
-import { useVideoSave } from '../../../contexts/VideoSaveContext';
+import { Subject, Concept } from '../../../types/video';
+import { SubjectService } from '../../../services/firebase/subjects';
+import { auth } from '../../../services/firebase';
 
-const { width, height: WINDOW_HEIGHT } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 49; // Bottom tab bar
-const TOP_TAB_HEIGHT = 45; // Top tab bar
-const HEADER_HEIGHT = 44; // Navigation header
-const BOTTOM_SPACE = Platform.OS === 'ios' ? 34 : 0; // Home indicator height on iOS
-const TOP_SPACE = Platform.OS === 'ios' ? 47 : 0; // Status bar height on iOS
-const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT - TOP_TAB_HEIGHT - HEADER_HEIGHT - BOTTOM_SPACE - TOP_SPACE;
-
-type Tab = 'home' | 'videos' | 'practice';
-
-export default function SubjectDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const subject = SUBJECT_DATA[id as MainSubject];
-  const [activeTab, setActiveTab] = useState<Tab>('home');
-  const insets = useSafeAreaInsets();
-  const { subscribe } = useVideoSave();
-  
-  // Calculate available height for video
-  const videoHeight = useMemo(() => {
-    const headerHeight = 44; // Stack navigation header
-    const topTabHeight = 45; // Our custom top tabs
-    const bottomTabHeight = 49; // Standard tab bar height
-    const bottomTabPadding = 30; // Combined top and bottom padding of our custom bottom tabs
-    
-    // Calculate height considering safe areas and UI elements
-    return WINDOW_HEIGHT - headerHeight - topTabHeight - bottomTabHeight - bottomTabPadding - insets.top - insets.bottom;
-  }, [insets]);
-  
-  // Video feed state
-  const [videos, setVideos] = useState<Video[]>([]);
+export default function SubjectDetailScreen() {
+  const { id } = useLocalSearchParams();
+  const [subject, setSubject] = useState<Subject | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | undefined>(undefined);
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
-  const [error, setError] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
 
-  // Add saved videos state
-  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
-  const [loadingSaved, setLoadingSaved] = useState(true);
-
-  // Subscribe to video save changes
   useEffect(() => {
-    const unsubscribe = subscribe(() => {
-      loadSavedVideos();
-    });
-    return () => unsubscribe();
-  }, []);
+    loadSubject();
+  }, [id]);
 
-  // Load saved videos when component mounts
-  useEffect(() => {
-    loadSavedVideos();
-  }, []);
+  const loadSubject = async () => {
+    if (!auth.currentUser || !id) return;
 
-  const loadSavedVideos = async () => {
-    if (!auth.currentUser) return;
-    
     try {
-      setLoadingSaved(true);
-      const videos = await fetchSavedVideos(auth.currentUser.uid);
-      // Filter videos by current subject
-      const subjectVideos = videos.filter(video => video.category === subject.name);
-      setSavedVideos(subjectVideos);
-    } catch (error) {
-      console.error('Error loading saved videos:', error);
-    } finally {
-      setLoadingSaved(false);
-    }
-  };
-
-  const handleVideoPress = (videoId: string) => {
-    setActiveTab('videos');
-    // Find the index of the video in the videos array
-    const index = videos.findIndex(v => v.id === videoId);
-    if (index !== -1) {
-      setCurrentVideoIndex(index);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'videos') {
-      loadVideos();
-    }
-  }, [activeTab]);
-
-  const loadVideos = async (loadMore = false) => {
-    try {
-      if (loadMore && !lastVisible) return;
-
       setLoading(true);
-      setError(undefined);
+      setError(null);
+      const subjectData = await SubjectService.getSubjectById(id as string, auth.currentUser.uid);
       
-      const result = await VideoService.searchVideos(
-        '', 
-        { category: subject.name },
-        { field: 'createdAt', direction: 'desc' },
-        loadMore ? lastVisible : undefined
-      );
-      
-      setVideos(prev => loadMore ? [...prev, ...result.videos] : result.videos);
-      setLastVisible(result.lastVisible || undefined);
+      if (!subjectData) {
+        setError('Subject not found');
+        return;
+      }
+
+      setSubject(subjectData);
     } catch (error) {
-      console.error('Error loading videos:', error);
-      setError('Failed to load videos');
+      console.error('Error loading subject:', error);
+      setError('Failed to load subject');
     } finally {
       setLoading(false);
     }
   };
 
-  const onViewableItemsChanged = useCallback(({ 
-    viewableItems 
-  }: {
-    viewableItems: ViewToken[];
-    changed: ViewToken[];
-  }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-      setCurrentVideoIndex(viewableItems[0].index);
-    }
-  }, []);
-
-  const viewabilityConfig = {
-    itemVisiblePercentThreshold: 50
-  };
-
-  const renderHomeContent = () => (
-    <View style={styles.homeSection}>
-      <Text style={styles.description}>{subject.description}</Text>
-      
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Videos Watched</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Hours Watched</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>0%</Text>
-          <Text style={styles.statLabel}>Quiz Score</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Saved Videos</Text>
-        {loadingSaved ? (
-          <View style={styles.savedVideosLoading}>
-            <ActivityIndicator size="small" color="#fff" />
-          </View>
-        ) : savedVideos.length === 0 ? (
-          <View style={styles.savedVideosEmpty}>
-            <Text style={styles.emptyText}>No saved videos in this subject</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={savedVideos}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.savedVideoCard}
-                onPress={() => handleVideoPress(item.id)}
-              >
-                <Image
-                  source={{ uri: item.thumbnailUrl }}
-                  style={styles.savedVideoThumbnail}
-                />
-                <View style={styles.savedVideoInfo}>
-                  <Text style={styles.savedVideoTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.savedVideoAuthor} numberOfLines={1}>
-                    {item.authorName}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id}
-          />
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Continue Watching</Text>
-        <View style={styles.continueWatchingEmpty}>
-          <Text style={styles.emptyText}>No videos in progress</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recently Added</Text>
-        <TouchableOpacity 
-          style={styles.startButton}
-          onPress={() => setActiveTab('videos')}
-        >
-          <Text style={styles.startButtonText}>Browse All Videos</Text>
-        </TouchableOpacity>
-      </View>
+  const renderProgressBar = (progress: number) => (
+    <View style={styles.progressBarContainer}>
+      <View style={[styles.progressBar, { width: `${progress}%` }]} />
     </View>
   );
 
-  const renderLearnContent = () => {
-    if (loading && !videos.length) {
-      return (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      );
-    }
-
-    if (error && !videos.length) {
-      return (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={() => loadVideos()}
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    if (!videos.length) {
-      return (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>No videos available</Text>
-        </View>
-      );
-    }
+  const renderConcept = (concept: Concept) => {
+    const getStatusColor = () => {
+      switch (concept.status) {
+        case 'mastered':
+          return '#2E7D32';
+        case 'in_progress':
+          return '#F57F17';
+        default:
+          return '#666';
+      }
+    };
 
     return (
-      <View style={styles.learnContainer}>
-        <FlatList
-          data={videos}
-          renderItem={({ item, index }) => (
-            <View style={[styles.videoContainer, { height: videoHeight }]}>
-              <VideoCard 
-                video={item} 
-                isActive={index === currentVideoIndex}
-                containerHeight={videoHeight}
-              />
-            </View>
-          )}
-          keyExtractor={(item) => item.id}
-          onEndReached={() => loadVideos(true)}
-          onEndReachedThreshold={0.5}
-          snapToInterval={videoHeight}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          getItemLayout={(_, index) => ({
-            length: videoHeight,
-            offset: videoHeight * index,
-            index,
-          })}
-          removeClippedSubviews={true}
-          windowSize={3}
-          maxToRenderPerBatch={2}
-          updateCellsBatchingPeriod={100}
-          initialNumToRender={2}
-          ListFooterComponent={() =>
-            loading ? (
-              <View style={[styles.footer, { height: videoHeight }]}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            ) : null
-          }
-        />
-      </View>
+      <TouchableOpacity 
+        key={concept.id}
+        style={styles.conceptItem}
+        onPress={() => router.push(`/concept/${concept.id}`)}
+      >
+        <View style={styles.conceptHeader}>
+          <Text style={styles.conceptName}>{concept.name}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
+            <Text style={styles.statusText}>
+              {concept.status.split('_').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+              ).join(' ')}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.conceptDescription}>{concept.description}</Text>
+      </TouchableOpacity>
     );
   };
 
-  const renderPracticeContent = () => (
-    <View style={styles.comingSoonContainer}>
-      <Text style={styles.comingSoonText}>Quizzes coming soon!</Text>
-    </View>
-  );
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return renderHomeContent();
-      case 'videos':
-        return renderLearnContent();
-      case 'practice':
-        return renderPracticeContent();
-    }
-  };
-
-  const renderBottomTabs = () => (
-    <View style={styles.bottomTabs}>
-      <TouchableOpacity 
-        style={styles.bottomTab}
-        onPress={() => router.push('/(app)/(tabs)')}
-      >
-        <Ionicons name="home-outline" size={24} color="#666" />
-        <Text style={styles.bottomTabText}>Home</Text>
-      </TouchableOpacity>
-      <TouchableOpacity 
-        style={styles.bottomTab}
-        onPress={() => router.push('/(app)/(tabs)/search')}
-      >
-        <Ionicons name="search-outline" size={24} color="#666" />
-        <Text style={styles.bottomTabText}>Search</Text>
-      </TouchableOpacity>
-      <TouchableOpacity 
-        style={styles.bottomTab}
-        onPress={() => router.push('/(app)/(tabs)/profile')}
-      >
-        <Ionicons name="person-outline" size={24} color="#666" />
-        <Text style={styles.bottomTabText}>Profile</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  if (!subject) {
+  if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Subject not found</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !subject) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error || 'Subject not found'}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadSubject}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: subject.name,
-          headerStyle: {
-            backgroundColor: subject.color,
-          },
-          headerTintColor: '#fff',
-          headerShadowVisible: false,
-        }}
-      />
-      
-      <View style={styles.content}>
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'home' && styles.activeTab]}
-            onPress={() => setActiveTab('home')}
-          >
-            <Text style={[styles.tabText, activeTab === 'home' && styles.activeTabText]}>
-              Home
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'videos' && styles.activeTab]}
-            onPress={() => setActiveTab('videos')}
-          >
-            <Text style={[styles.tabText, activeTab === 'videos' && styles.activeTabText]}>
-              Videos
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'practice' && styles.activeTab]}
-            onPress={() => setActiveTab('practice')}
-          >
-            <Text style={[styles.tabText, activeTab === 'practice' && styles.activeTabText]}>
-              Quiz
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
-        {renderContent()}
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.title}>{subject.name}</Text>
       </View>
-      
-      {renderBottomTabs()}
-    </SafeAreaView>
+
+      <View style={styles.content}>
+        <Text style={styles.description}>{subject.description}</Text>
+        
+        <View style={styles.progressSection}>
+          {renderProgressBar(subject.progress)}
+          <Text style={styles.progressText}>{subject.progress}% Complete</Text>
+          <Text style={styles.statsText}>
+            {subject.completedVideos} / {subject.videosCount} videos watched
+          </Text>
+        </View>
+
+        <View style={styles.graphSection}>
+          <Text style={styles.sectionTitle}>Knowledge Graph</Text>
+          <View style={styles.graphPlaceholder}>
+            <Text style={styles.graphText}>Knowledge graph visualization coming soon...</Text>
+          </View>
+        </View>
+
+        <View style={styles.conceptsSection}>
+          <Text style={styles.sectionTitle}>Core Concepts</Text>
+          {subject.concepts.map(renderConcept)}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#111',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
   },
   content: {
-    flex: 1,
-  },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
-    backgroundColor: '#000',
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#fff',
-  },
-  tabText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  activeTabText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  homeSection: {
     padding: 20,
   },
   description: {
     fontSize: 16,
     color: '#fff',
-    marginBottom: 10,
+    marginBottom: 24,
+    lineHeight: 24,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 30,
+  progressSection: {
+    marginBottom: 24,
   },
-  statItem: {
-    alignItems: 'center',
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: '#333',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  statNumber: {
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#1a472a',
+  },
+  progressText: {
+    fontSize: 16,
     color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
     marginBottom: 4,
   },
-  statLabel: {
+  statsText: {
+    fontSize: 14,
     color: '#666',
-    fontSize: 12,
   },
-  section: {
-    marginTop: 32,
+  graphSection: {
+    marginBottom: 24,
   },
   sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
     marginBottom: 16,
   },
-  continueWatchingEmpty: {
-    backgroundColor: '#111',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 100,
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  startButton: {
+  graphPlaceholder: {
+    height: 200,
     backgroundColor: '#222',
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
-  startButtonText: {
-    color: '#fff',
+  graphText: {
+    color: '#666',
+    textAlign: 'center',
+  },
+  conceptsSection: {
+    marginBottom: 24,
+  },
+  conceptItem: {
+    backgroundColor: '#222',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+  },
+  conceptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  conceptName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
   },
-  centerContainer: {
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  conceptDescription: {
+    fontSize: 14,
+    color: '#ccc',
+    lineHeight: 20,
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   errorText: {
-    color: '#fff',
+    color: '#ff4444',
     fontSize: 16,
+    textAlign: 'center',
     marginBottom: 20,
   },
   retryButton: {
     backgroundColor: '#333',
-    padding: 10,
-    borderRadius: 5,
+    padding: 12,
+    borderRadius: 8,
   },
   retryText: {
     color: '#fff',
     fontSize: 14,
-  },
-  learnContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  videoContainer: {
-    backgroundColor: '#000',
-    overflow: 'hidden',
-  },
-  footer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomTabs: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#222',
-    backgroundColor: '#000',
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  bottomTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomTabText: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  comingSoonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  comingSoonText: {
-    color: '#666',
-    fontSize: 16,
-  },
-  savedVideosLoading: {
-    height: 180,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  savedVideosEmpty: {
-    height: 180,
-    backgroundColor: '#111',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  savedVideoCard: {
-    width: 200,
-    marginRight: 12,
-    backgroundColor: '#111',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  savedVideoThumbnail: {
-    width: '100%',
-    height: 112,
-    backgroundColor: '#222',
-  },
-  savedVideoInfo: {
-    padding: 12,
-  },
-  savedVideoTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  savedVideoAuthor: {
-    color: '#666',
-    fontSize: 12,
   },
 }); 

@@ -3,22 +3,14 @@ import { Stack } from 'expo-router';
 
 export default function AppLayout() {
   return (
-    <Stack>
-      <Stack.Screen
-        name="(tabs)"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="concept/[id]"
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen 
+        name="subject/[id]" 
         options={{
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: '#000',
-          },
-          headerTintColor: '#fff',
-          title: 'Concept',
-          presentation: 'card'
-        }}
+          headerShown: false,
+          presentation: 'modal'
+        }} 
       />
     </Stack>
   );

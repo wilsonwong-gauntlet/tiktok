@@ -1,0 +1,118 @@
+import { 
+  collection, 
+  query, 
+  getDocs,
+  doc,
+  getDoc,
+  where,
+  orderBy,
+  limit 
+} from 'firebase/firestore';
+import { db } from './index';
+import { Subject, UserProgress } from '../../types/video';
+
+const SUBJECTS_COLLECTION = 'subjects';
+const USER_PROGRESS_COLLECTION = 'userProgress';
+
+export class SubjectService {
+  static async getSubjects(userId: string): Promise<Subject[]> {
+    try {
+      console.log('Getting subjects for user:', userId);
+      
+      // Get all subjects
+      const subjectsRef = collection(db, SUBJECTS_COLLECTION);
+      console.log('Fetching subjects from collection:', SUBJECTS_COLLECTION);
+      const subjectsSnapshot = await getDocs(subjectsRef);
+      console.log('Found subjects:', subjectsSnapshot.size);
+      
+      const subjects = subjectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Subject[];
+      console.log('Mapped subjects:', subjects);
+
+      // Get user progress
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      console.log('Fetching user progress from:', USER_PROGRESS_COLLECTION);
+      const userProgressDoc = await getDoc(userProgressRef);
+      const userProgress = userProgressDoc.data() as UserProgress;
+      console.log('User progress:', userProgress);
+
+      // Merge subject data with user progress
+      const mergedSubjects = subjects.map(subject => ({
+        ...subject,
+        progress: userProgress?.subjects[subject.id]?.progress || 0,
+        completedVideos: userProgress?.subjects[subject.id]?.completedVideos?.length || 0
+      }));
+      console.log('Merged subjects with progress:', mergedSubjects);
+
+      return mergedSubjects;
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+      throw error;
+    }
+  }
+
+  static async getSubjectById(subjectId: string, userId: string): Promise<Subject | null> {
+    try {
+      const subjectRef = doc(db, SUBJECTS_COLLECTION, subjectId);
+      const subjectDoc = await getDoc(subjectRef);
+      
+      if (!subjectDoc.exists()) {
+        return null;
+      }
+
+      const subject = {
+        id: subjectDoc.id,
+        ...subjectDoc.data()
+      } as Subject;
+
+      // Get user progress for this subject
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      const userProgressDoc = await getDoc(userProgressRef);
+      const userProgress = userProgressDoc.data() as UserProgress;
+
+      return {
+        ...subject,
+        progress: userProgress?.subjects[subjectId]?.progress || 0,
+        completedVideos: userProgress?.subjects[subjectId]?.completedVideos?.length || 0
+      };
+    } catch (error) {
+      console.error('Error fetching subject:', error);
+      throw error;
+    }
+  }
+
+  static async searchSubjects(searchText: string, userId: string): Promise<Subject[]> {
+    try {
+      const subjectsRef = collection(db, SUBJECTS_COLLECTION);
+      const searchQuery = query(
+        subjectsRef,
+        where('searchableText', 'array-contains', searchText.toLowerCase()),
+        orderBy('name'),
+        limit(10)
+      );
+
+      const snapshot = await getDocs(searchQuery);
+      const subjects = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Subject[];
+
+      // Get user progress
+      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      const userProgressDoc = await getDoc(userProgressRef);
+      const userProgress = userProgressDoc.data() as UserProgress;
+
+      // Merge subject data with user progress
+      return subjects.map(subject => ({
+        ...subject,
+        progress: userProgress?.subjects[subject.id]?.progress || 0,
+        completedVideos: userProgress?.subjects[subject.id]?.completedVideos?.length || 0
+      }));
+    } catch (error) {
+      console.error('Error searching subjects:', error);
+      throw error;
+    }
+  }
+} 

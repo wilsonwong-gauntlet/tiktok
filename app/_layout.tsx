@@ -4,8 +4,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter, useSegments } from 'expo-router';
 import { auth } from '../services/firebase/index';
 import { VideoSaveProvider } from '../contexts/VideoSaveContext';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function RootLayout() {
   const segments = useSegments();
@@ -30,66 +28,9 @@ export default function RootLayout() {
   return (
     <VideoSaveProvider>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
         <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        <Stack.Screen name="login" />
       </Stack>
     </VideoSaveProvider>
-  );
-}
-
-export function AppLayout() {
-  return (
-    <Tabs
-      screenOptions={{
-        tabBarStyle: {
-          backgroundColor: '#111',
-          borderTopColor: '#333',
-        },
-        tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#666',
-        headerStyle: {
-          backgroundColor: '#111',
-        },
-        headerTintColor: '#fff',
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="subjects"
-        options={{
-          title: 'Subjects',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="learning"
-        options={{
-          title: 'My Learning',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="school-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
   );
 }
