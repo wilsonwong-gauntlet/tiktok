@@ -1,12 +1,20 @@
 import * as admin from 'firebase-admin';
 import { join } from 'path';
+import { config } from 'dotenv';
+
+// Load environment variables from .env.local
+config({ path: join(__dirname, '..', '.env.local') });
 
 // Initialize Firebase Admin
 const serviceAccount = require('../config/firebase/service-account.json');
 
+if (!serviceAccount) {
+  throw new Error('Firebase service account configuration is missing');
+}
+
 const app = admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "tiktok-3142f.firebasestorage.app"
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "tiktok-3142f.firebasestorage.app"
 });
 
 // Initialize Firestore

@@ -4,9 +4,19 @@ import * as readline from 'readline';
 import ffmpeg from 'fluent-ffmpeg';
 import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { uploadLocalVideo } from './video-service';
+import { config } from 'dotenv';
+
+// Load environment variables
+config({ path: join(__dirname, '..', '.env.local') });
 
 // Set FFmpeg path
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
+// Create temp directory if it doesn't exist
+const tempDir = join(__dirname, '..', 'temp');
+if (!existsSync(tempDir)) {
+  mkdirSync(tempDir, { recursive: true });
+}
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -25,10 +35,14 @@ const COMMON_CATEGORIES = [
   'Programming',
   'Tutorial',
   'Education',
-  'Entertainment'
+  'Entertainment',
+  'Philosophy',
+  'Physics',
+  'Mathematics'
 ];
 
 async function selectFromOptions(options: string[], customAllowed = true): Promise<string> {
+  console.log('\nAvailable options:');
   options.forEach((opt, i) => console.log(`${i + 1}. ${opt}`));
   if (customAllowed) {
     console.log('Or enter your own');
@@ -43,17 +57,17 @@ async function selectFromOptions(options: string[], customAllowed = true): Promi
 
 async function getCommonMetadata() {
   console.log('\nEnter common metadata (will apply to all videos):');
-  console.log('Select category:');
+  console.log('\nSelect category:');
   const category = await selectFromOptions(COMMON_CATEGORIES);
   
-  const commonTagsInput = await question('Common tags for all videos (comma-separated): ');
-  const commonTags = commonTagsInput.split(',').map(tag => tag.trim());
+  const commonTagsInput = await question('\nCommon tags for all videos (comma-separated): ');
+  const commonTags = commonTagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
   
   return { category, commonTags };
 }
 
 async function generateThumbnail(videoPath: string): Promise<string> {
-  const thumbnailDir = join(dirname(videoPath), 'thumbnails');
+  const thumbnailDir = join(tempDir, 'thumbnails');
   const videoName = basename(videoPath).split('.')[0];
   const thumbnailPath = join(thumbnailDir, `${videoName}_thumb.jpg`);
 
@@ -70,24 +84,24 @@ async function generateThumbnail(videoPath: string): Promise<string> {
         reject(err);
       })
       .screenshots({
-        timestamps: ['50%'], // Take screenshot from middle of video
+        timestamps: ['50%'],
         filename: basename(thumbnailPath),
         folder: thumbnailDir,
-        size: '720x?', // 720p width, maintain aspect ratio
+        size: '720x?',
       });
   });
 }
 
 async function convertToMp4(inputPath: string): Promise<string> {
-  const outputPath = join(dirname(inputPath), `${basename(inputPath, '.webm')}.mp4`);
+  const outputPath = join(tempDir, `${Date.now()}.mp4`);
   
   return new Promise<string>((resolve, reject) => {
     ffmpeg(inputPath)
       .outputOptions([
-        '-c:v libx264', // Use H.264 codec for video
-        '-c:a aac',     // Use AAC codec for audio
+        '-c:v libx264',
+        '-c:a aac',
         '-strict experimental',
-        '-b:a 192k'     // Audio bitrate
+        '-b:a 192k'
       ])
       .toFormat('mp4')
       .on('end', () => {
@@ -109,10 +123,12 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
       return null;
     }
 
-    // Convert WebM to MP4 if necessary
+    console.log(`\nProcessing ${basename(filePath)}...`);
+
+    // Convert video to MP4 if necessary
     let processedFilePath = filePath;
-    if (filePath.toLowerCase().endsWith('.webm')) {
-      console.log('Converting WebM to MP4...');
+    if (!filePath.toLowerCase().endsWith('.mp4')) {
+      console.log('Converting video to MP4...');
       try {
         processedFilePath = await convertToMp4(filePath);
         console.log('Conversion completed:', processedFilePath);
@@ -122,7 +138,7 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
       }
     }
 
-    // Get video metadata from user input
+    // Get video metadata
     console.log(`\nEnter details for ${basename(filePath)}:`);
     const title = await question('Title: ');
     const description = await question('Description: ');
@@ -136,11 +152,12 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
     const tags = [...(commonMetadata?.commonTags || []), ...specificTags];
 
     // Generate thumbnail
-    console.log('Generating thumbnail...');
+    console.log('\nGenerating thumbnail...');
     const thumbnailPath = await generateThumbnail(processedFilePath);
     console.log('Thumbnail generated:', thumbnailPath);
 
-    // Prepare video data
+    // Upload video
+    console.log('\nUploading video...');
     const videoData = {
       filePath: resolve(processedFilePath),
       thumbnailPath,
@@ -152,20 +169,17 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
       authorName: 'Manual Upload'
     };
 
-    // Upload the video
-    console.log('\nUploading video...');
     const videoId = await uploadLocalVideo(videoData);
     console.log(`Video uploaded successfully! Video ID: ${videoId}`);
+    console.log('Transcription process started automatically.');
 
-    // Clean up converted file if it was created
-    if (processedFilePath !== filePath && existsSync(processedFilePath)) {
-      try {
-        unlinkSync(processedFilePath);
-        console.log('Cleaned up converted file');
-      } catch (error) {
-        console.warn('Failed to clean up converted file:', error);
-      }
+    // Clean up temporary files
+    if (processedFilePath !== filePath) {
+      unlinkSync(processedFilePath);
+      console.log('Cleaned up converted file');
     }
+    unlinkSync(thumbnailPath);
+    console.log('Cleaned up thumbnail file');
 
     return videoId;
   } catch (error) {
@@ -176,7 +190,6 @@ async function uploadVideo(filePath: string, commonMetadata?: { category: string
 
 async function main() {
   try {
-    // Get video file paths from command line arguments
     const filePaths = process.argv.slice(2);
     if (filePaths.length === 0) {
       console.error('Please provide at least one video file path');
@@ -185,25 +198,21 @@ async function main() {
 
     console.log(`Found ${filePaths.length} videos to upload`);
     
-    // Ask if user wants to enter common metadata
-    const useCommonMetadata = await question('Do you want to enter common metadata for all videos? (y/n): ');
-    const commonMetadata = useCommonMetadata.toLowerCase() === 'y' ? 
-      await getCommonMetadata() : undefined;
+    const useCommonMetadata = (await question('\nDo you want to enter common metadata for all videos? (y/n): ')).toLowerCase() === 'y';
+    const commonMetadata = useCommonMetadata ? await getCommonMetadata() : undefined;
 
-    // Upload videos sequentially
     const results = [];
     for (const filePath of filePaths) {
       const result = await uploadVideo(filePath, commonMetadata);
       results.push({ filePath, success: !!result, videoId: result });
     }
 
-    // Print summary
     console.log('\nUpload Summary:');
+    console.log('----------------');
     results.forEach(({ filePath, success, videoId }) => {
       console.log(`${basename(filePath)}: ${success ? `Success (ID: ${videoId})` : 'Failed'}`);
     });
     
-    // Close readline interface
     rl.close();
   } catch (error) {
     console.error('Error:', error);
