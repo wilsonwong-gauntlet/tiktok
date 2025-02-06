@@ -16,7 +16,8 @@ import { SubjectService } from '../../../services/firebase/subjects';
 import { VideoService } from '../../../services/firebase/video';
 import { auth } from '../../../services/firebase';
 import VideoThumbnail from '../../../components/VideoThumbnail';
-import { collection, doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../../services/firebase';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
@@ -27,6 +28,22 @@ type FilterOptions = {
   sortBy: 'date' | 'title' | 'views';
   sortOrder: 'asc' | 'desc';
   conceptFilter: string[];
+};
+
+type Note = {
+  id: string;
+  videoId: string;
+  content: string;
+  keyTakeaways: string[];
+  reflections: {
+    understanding: string[];
+    gaps: string[];
+    applications: string[];
+    connections: string[];
+  };
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string;
 };
 
 export default function SubjectDetailScreen() {
@@ -47,6 +64,8 @@ export default function SubjectDetailScreen() {
   });
   const [filteredVideos, setFilteredVideos] = useState<Video[]>([]);
   const [filteredSavedVideos, setFilteredSavedVideos] = useState<Video[]>([]);
+  const [notes, setNotes] = useState<{[key: string]: Note}>({});
+  const [loadingNotes, setLoadingNotes] = useState(false);
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -61,6 +80,12 @@ export default function SubjectDetailScreen() {
   useEffect(() => {
     filterContent();
   }, [filterOptions, videos, savedVideos]);
+
+  useEffect(() => {
+    if (activeTab === 'reflections' && videos.length > 0) {
+      loadNotes();
+    }
+  }, [activeTab, videos]);
 
   const loadAllSummaries = async () => {
     try {
@@ -161,6 +186,34 @@ export default function SubjectDetailScreen() {
 
     setFilteredVideos(filterVideos(videos));
     setFilteredSavedVideos(filterVideos(savedVideos));
+  };
+
+  const loadNotes = async () => {
+    if (!auth.currentUser) return;
+
+    try {
+      setLoadingNotes(true);
+      const notesRef = collection(db, 'users', auth.currentUser.uid, 'notes');
+      const notesQuery = query(notesRef, where('videoId', 'in', videos.map(v => v.id)));
+      const snapshot = await getDocs(notesQuery);
+      
+      const notesMap = snapshot.docs.reduce((acc, doc) => {
+        const note = {
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
+        } as Note;
+        acc[note.videoId] = note;
+        return acc;
+      }, {} as {[key: string]: Note});
+      
+      setNotes(notesMap);
+    } catch (error) {
+      console.error('Error loading notes:', error);
+    } finally {
+      setLoadingNotes(false);
+    }
   };
 
   const renderProgressBar = (progress: number) => (
@@ -444,15 +497,84 @@ export default function SubjectDetailScreen() {
     </View>
   );
 
+  const renderReflectionSection = (title: string, items: string[]) => (
+    <View style={styles.reflectionSection}>
+      <Text style={styles.reflectionTitle}>{title}</Text>
+      {items.length > 0 ? (
+        items.map((item, index) => (
+          <View key={index} style={styles.reflectionItem}>
+            <Text style={styles.bulletDot}>•</Text>
+            <Text style={styles.reflectionText}>{item}</Text>
+          </View>
+        ))
+      ) : (
+        <Text style={styles.emptyText}>No {title.toLowerCase()} added yet</Text>
+      )}
+    </View>
+  );
+
   const renderReflectionsTab = () => (
     <View style={styles.reflectionsContainer}>
-      <View style={styles.comingSoon}>
-        <Ionicons name="journal-outline" size={48} color="#666" />
-        <Text style={styles.comingSoonTitle}>Reflections Coming Soon</Text>
-        <Text style={styles.comingSoonText}>
-          Record your thoughts and insights as you learn each concept
-        </Text>
-      </View>
+      {loadingNotes ? (
+        <ActivityIndicator size="large" color="#fff" />
+      ) : Object.entries(notes).length > 0 ? (
+        Object.entries(notes).map(([videoId, note]) => {
+          const video = videos.find(v => v.id === videoId);
+          if (!video) return null;
+
+          return (
+            <View key={videoId} style={styles.reflectionCard}>
+              <TouchableOpacity 
+                style={styles.reflectionHeader}
+                onPress={() => router.push(`/video/${videoId}`)}
+              >
+                <VideoThumbnail video={video} />
+                <Text style={styles.reflectionVideoTitle}>{video.title}</Text>
+              </TouchableOpacity>
+
+              <View style={styles.reflectionContent}>
+                {note.content && (
+                  <View style={styles.quickCapture}>
+                    <Text style={styles.reflectionSubtitle}>Quick Capture</Text>
+                    <Text style={styles.reflectionText}>{note.content}</Text>
+                  </View>
+                )}
+
+                {note.keyTakeaways?.length > 0 && (
+                  <View style={styles.keyTakeaways}>
+                    <Text style={styles.reflectionSubtitle}>Key Takeaways</Text>
+                    {note.keyTakeaways.map((point, index) => (
+                      <View key={index} style={styles.reflectionItem}>
+                        <Text style={styles.bulletDot}>•</Text>
+                        <Text style={styles.reflectionText}>{point}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.reflectionsGrid}>
+                  {renderReflectionSection('Understanding', note.reflections.understanding)}
+                  {renderReflectionSection('Gaps', note.reflections.gaps)}
+                  {renderReflectionSection('Applications', note.reflections.applications)}
+                  {renderReflectionSection('Connections', note.reflections.connections)}
+                </View>
+
+                <Text style={styles.updatedAt}>
+                  Last updated: {note.updatedAt.toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+          );
+        })
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="journal-outline" size={48} color="#666" />
+          <Text style={styles.emptyTitle}>No Reflections Yet</Text>
+          <Text style={styles.emptyText}>
+            Start watching videos and add your reflections to track your learning journey
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -812,9 +934,75 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   reflectionsContainer: {
+    gap: 16,
+  },
+  reflectionCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  reflectionHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  reflectionVideoTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    padding: 12,
+  },
+  reflectionContent: {
+    padding: 16,
+  },
+  quickCapture: {
+    marginBottom: 16,
+  },
+  keyTakeaways: {
+    marginBottom: 16,
+  },
+  reflectionSubtitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  reflectionsGrid: {
+    gap: 16,
+  },
+  reflectionSection: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 12,
+  },
+  reflectionTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  reflectionItem: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  reflectionText: {
+    color: '#ccc',
+    fontSize: 14,
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    lineHeight: 20,
+  },
+  updatedAt: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 12,
+    textAlign: 'right',
+  },
+  emptyTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
   },
   searchContainer: {
     flexDirection: 'row',
