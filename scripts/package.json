@@ -1,0 +1,11 @@
+{
+  "name": "tiktok-scripts",
+  "version": "1.0.0",
+  "description": "Management scripts for TikTok clone",
+  "main": "index.js",
+  "dependencies": {
+    "inquirer": "^8.2.5",
+    "@types/inquirer": "^8.2.5",
+    "typescript": "^4.9.5"
+  }
+} 

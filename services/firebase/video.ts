@@ -27,7 +27,9 @@ interface LocalVideoUpload {
   thumbnailPath: string;
   title: string;
   description: string;
-  category: string;
+  subjectId: string;      // Primary subject
+  conceptIds: string[];   // Primary concepts
+  relatedSubjects?: string[];
   tags: string[];
   authorId: string;
   authorName: string;
@@ -443,7 +445,7 @@ export class VideoService {
       const videoExtension = videoData.filePath.split('.').pop()?.toLowerCase();
       const videoContentType = videoExtension === 'webm' ? 'video/webm' : 
                               videoExtension === 'mp4' ? 'video/mp4' : 
-                              'video/mp4'; // default to mp4 if unknown
+                              'video/mp4';
 
       await uploadBytes(videoRef, videoBlob, {
         contentType: videoContentType
@@ -471,7 +473,9 @@ export class VideoService {
         thumbnailUrl: thumbnailUrl,
         duration: 0, // TODO: Get video duration
         createdAt: serverTimestamp(),
-        category: videoData.category,
+        subjectId: videoData.subjectId,
+        conceptIds: videoData.conceptIds,
+        relatedSubjects: videoData.relatedSubjects || [],
         tags: videoData.tags,
         searchableText: [
           ...videoData.title.toLowerCase().split(' '),
@@ -481,7 +485,7 @@ export class VideoService {
         viewCount: 0,
         authorId: videoData.authorId,
         authorName: videoData.authorName,
-        format: videoContentType // Store the video format
+        format: videoContentType
       };
 
       const docRef = await addDoc(videosRef, videoDoc);
@@ -568,6 +572,48 @@ export class VideoService {
       console.log('Cleared all summaries successfully');
     } catch (error) {
       console.error('Error clearing summaries:', error);
+      throw error;
+    }
+  }
+
+  static async getVideosBySubject(subjectId: string): Promise<Video[]> {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const q = query(
+        videosRef,
+        where('subjectId', '==', subjectId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate()
+      })) as Video[];
+    } catch (error) {
+      console.error('Error fetching videos by subject:', error);
+      throw error;
+    }
+  }
+
+  static async getVideosByConcept(conceptId: string): Promise<Video[]> {
+    try {
+      const videosRef = collection(db, VIDEOS_COLLECTION);
+      const q = query(
+        videosRef,
+        where('conceptIds', 'array-contains', conceptId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate()
+      })) as Video[];
+    } catch (error) {
+      console.error('Error fetching videos by concept:', error);
       throw error;
     }
   }

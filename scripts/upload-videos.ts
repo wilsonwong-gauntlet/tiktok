@@ -5,6 +5,9 @@ import ffmpeg from 'fluent-ffmpeg';
 import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { uploadLocalVideo } from './video-service';
 import { config } from 'dotenv';
+import { db } from './firebase-admin';
+import { VideoService } from '../services/firebase/video';
+import * as admin from 'firebase-admin';
 
 // Load environment variables
 config({ path: join(__dirname, '..', '.env.local') });
@@ -116,75 +119,53 @@ async function convertToMp4(inputPath: string): Promise<string> {
   });
 }
 
-async function uploadVideo(filePath: string, commonMetadata?: { category: string; commonTags: string[] }) {
+interface VideoUpload {
+  filePath: string;
+  thumbnailPath: string;
+  title: string;
+  description: string;
+  subjectId: string;      // Primary subject
+  conceptIds: string[];   // Primary concepts
+  relatedSubjects?: string[];
+  tags: string[];
+  authorId: string;
+  authorName: string;
+}
+
+async function uploadVideo(videoData: VideoUpload) {
   try {
-    if (!existsSync(filePath)) {
-      console.error(`File not found: ${filePath}`);
-      return null;
+    // Upload video and get video ID
+    const videoId = await VideoService.uploadLocalVideo({
+      ...videoData,
+      searchableText: [
+        ...videoData.title.toLowerCase().split(' '),
+        ...videoData.description.toLowerCase().split(' '),
+        ...videoData.tags.map(tag => tag.toLowerCase())
+      ]
+    });
+
+    // Update subject's video counts
+    const subjectRef = db.collection('subjects').doc(videoData.subjectId);
+    await subjectRef.update({
+      videosCount: admin.firestore.FieldValue.increment(1),
+      primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
+    });
+
+    // Update concepts' video lists
+    const batch = db.batch();
+    for (const conceptId of videoData.conceptIds) {
+      const conceptRef = db.collection('concepts').doc(conceptId);
+      batch.update(conceptRef, {
+        primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
+      });
     }
+    await batch.commit();
 
-    console.log(`\nProcessing ${basename(filePath)}...`);
-
-    // Convert video to MP4 if necessary
-    let processedFilePath = filePath;
-    if (!filePath.toLowerCase().endsWith('.mp4')) {
-      console.log('Converting video to MP4...');
-      try {
-        processedFilePath = await convertToMp4(filePath);
-        console.log('Conversion completed:', processedFilePath);
-      } catch (error) {
-        console.error('Failed to convert video:', error);
-        return null;
-      }
-    }
-
-    // Get video metadata
-    console.log(`\nEnter details for ${basename(filePath)}:`);
-    const title = await question('Title: ');
-    const description = await question('Description: ');
-    
-    // Use common category or ask for specific one
-    const category = commonMetadata?.category || await selectFromOptions(COMMON_CATEGORIES);
-    
-    // Combine common tags with video-specific tags
-    const specificTagsInput = await question('Additional tags for this video (comma-separated): ');
-    const specificTags = specificTagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
-    const tags = [...(commonMetadata?.commonTags || []), ...specificTags];
-
-    // Generate thumbnail
-    console.log('\nGenerating thumbnail...');
-    const thumbnailPath = await generateThumbnail(processedFilePath);
-    console.log('Thumbnail generated:', thumbnailPath);
-
-    // Upload video
-    console.log('\nUploading video...');
-    const videoData = {
-      filePath: resolve(processedFilePath),
-      thumbnailPath,
-      title,
-      description,
-      category,
-      tags,
-      authorId: 'manual-upload',
-      authorName: 'Manual Upload'
-    };
-
-    const videoId = await uploadLocalVideo(videoData);
-    console.log(`Video uploaded successfully! Video ID: ${videoId}`);
-    console.log('Transcription process started automatically.');
-
-    // Clean up temporary files
-    if (processedFilePath !== filePath) {
-      unlinkSync(processedFilePath);
-      console.log('Cleaned up converted file');
-    }
-    unlinkSync(thumbnailPath);
-    console.log('Cleaned up thumbnail file');
-
+    console.log(`Successfully uploaded video ${videoId} and updated relationships`);
     return videoId;
   } catch (error) {
     console.error('Error uploading video:', error);
-    return null;
+    throw error;
   }
 }
 

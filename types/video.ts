@@ -51,22 +51,26 @@ export interface Video {
   url: string;
   thumbnailUrl: string;
   duration: number;
-  creator: string;
   createdAt: Date;
+  
+  // Subject & Concept Relationships
+  subjectId: string;
+  conceptIds: string[];
+  relatedSubjects?: string[];
+  
+  // Learning Materials
   summary?: VideoSummary;
-  concepts: string[];  // References to related learning concepts
-  category: string;
-  tags: string[];
-  aiSummary?: string;
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
+  
+  // Metadata
+  tags: string[];
+  searchableText: string[];
   viewCount: number;
   authorId: string;
   authorName: string;
-  retentionSchedule?: {
-    initialReview: number;  // hours after watching
-    reviewIntervals: number[];  // hours between reviews
-  };
+  
+  // Processing Status
   transcription?: string;
   transcriptionStatus: 'pending' | 'completed' | 'error';
   transcriptionError?: string;
