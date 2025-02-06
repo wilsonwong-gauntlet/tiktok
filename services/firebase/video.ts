@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
-import { Video, FurtherReading, VideoSummary } from '../../types/video';
+import { Video, FurtherReading, VideoSummary, Quiz } from '../../types/video';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const VIDEOS_PER_PAGE = 10;
@@ -614,6 +614,48 @@ export class VideoService {
       return snapshot.docs.map(doc => doc.data().videoId);
     } catch (error) {
       console.error('Error fetching saved video IDs:', error);
+      throw error;
+    }
+  }
+
+  static async generateQuiz(videoId: string): Promise<Quiz | null> {
+    try {
+      const videoRef = doc(db, VIDEOS_COLLECTION, videoId);
+      const videoDoc = await getDoc(videoRef);
+      
+      if (!videoDoc.exists()) {
+        throw new Error('Video not found');
+      }
+
+      const videoData = videoDoc.data();
+      
+      // Check if transcription is available
+      if (!videoData.transcription || videoData.transcriptionStatus !== 'completed') {
+        throw new Error('Video transcription is not available');
+      }
+
+      // Call the Cloud Function
+      const functions = getFunctions();
+      const generateQuizFunc = httpsCallable<
+        { videoId: string; transcription: string },
+        Quiz
+      >(functions, 'generateQuiz');
+      
+      const result = await generateQuizFunc({ 
+        videoId,
+        transcription: videoData.transcription 
+      });
+      
+      const quiz = result.data;
+      
+      // Update the video document with the new quiz
+      await updateDoc(videoRef, {
+        quiz: quiz
+      });
+
+      return quiz;
+    } catch (error) {
+      console.error('Error generating quiz:', error);
       throw error;
     }
   }

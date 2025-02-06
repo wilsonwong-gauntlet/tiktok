@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { Video as VideoType, Subject } from '../types/video';
+import { Video as VideoType, Subject, Quiz } from '../types/video';
 import { auth, saveVideo, unsaveVideo, isVideoSaved } from '../services/firebase/index';
 import { useEvent } from 'expo';
 import LearningPanel from './LearningPanel';
@@ -32,6 +32,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [subject, setSubject] = useState<Subject | null>(null);
   const [manuallyPaused, setManuallyPaused] = useState(false);
   const pathname = usePathname();
+  const [currentQuiz, setCurrentQuiz] = useState(video.quiz);
 
   // Reset manual pause when video becomes inactive
   useEffect(() => {
@@ -160,6 +161,10 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     setCommentSectionVisible(true);
   };
 
+  const handleQuizGenerated = (newQuiz: Quiz) => {
+    setCurrentQuiz(newQuiz);
+  };
+
   return (
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
@@ -257,11 +262,12 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         onClose={() => setLearningPanelVisible(false)}
         title={video.title}
         videoId={video.id}
-        aiSummary={video.summary}
+        summary={video.summary}
         furtherReading={video.furtherReading}
-        quiz={video.quiz}
+        quiz={currentQuiz}
         transcription={video.transcription}
         transcriptionStatus={video.transcriptionStatus}
+        onQuizGenerated={handleQuizGenerated}
       />
 
       <CommentSection

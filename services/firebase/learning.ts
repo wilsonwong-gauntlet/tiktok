@@ -112,21 +112,30 @@ export async function saveQuizAttempt(
 export async function getQuizAttempts(userId: string, quizId: string): Promise<QuizAttempt[]> {
   try {
     const attemptsRef = collection(db, 'users', userId, 'quizAttempts');
-    const attemptsQuery = query(
-      attemptsRef, 
-      where('quizId', '==', quizId),
-      orderBy('completedAt', 'desc')
-    );
+    const q = query(attemptsRef, where('quizId', '==', quizId));
+    const querySnapshot = await getDocs(q);
     
-    const attempts = await getDocs(attemptsQuery);
-    return attempts.docs.map(doc => ({
-      id: doc.id,
+    return querySnapshot.docs.map(doc => ({
       ...doc.data(),
-      completedAt: (doc.data().completedAt as Timestamp).toDate(),
+      id: doc.id,
+      completedAt: doc.data().completedAt.toDate(),
     })) as QuizAttempt[];
   } catch (error) {
     console.error('Error getting quiz attempts:', error);
-    throw error;
+    return [];
+  }
+}
+
+export async function getLastQuizAttempt(userId: string, quizId: string): Promise<QuizAttempt | null> {
+  try {
+    const attempts = await getQuizAttempts(userId, quizId);
+    if (attempts.length === 0) return null;
+    
+    // Sort by completedAt in descending order
+    return attempts.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())[0];
+  } catch (error) {
+    console.error('Error getting last quiz attempt:', error);
+    return null;
   }
 }
 

@@ -14,11 +14,12 @@ interface LearningPanelProps {
   onClose: () => void;
   title: string;
   videoId: string;
-  aiSummary?: string;
+  summary?: VideoSummary;
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
   transcription?: string;
   transcriptionStatus?: 'pending' | 'completed' | 'error';
+  onQuizGenerated?: (quiz: Quiz) => void;
 }
 
 type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition' | 'transcription';
@@ -51,11 +52,12 @@ export default function LearningPanel({
   onClose,
   title,
   videoId,
-  aiSummary,
+  summary: initialSummary,
   furtherReading,
   quiz,
   transcription,
   transcriptionStatus,
+  onQuizGenerated,
 }: LearningPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [notes, setNotes] = useState('');
@@ -76,8 +78,10 @@ export default function LearningPanel({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState<VideoSummary | undefined>();
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [summary, setSummary] = useState<VideoSummary | undefined>(initialSummary);
+  const [note, setNote] = useState<Note | null>(null);
 
   useEffect(() => {
     if (visible && auth.currentUser) {
@@ -177,6 +181,21 @@ export default function LearningPanel({
 
   const handleAddTakeaway = () => {
     setKeyTakeaways([...keyTakeaways, '']);
+  };
+
+  const handleGenerateQuiz = async () => {
+    try {
+      setGeneratingQuiz(true);
+      const newQuiz = await VideoService.generateQuiz(videoId);
+      // Update the parent component's quiz state
+      if (newQuiz) {
+        onQuizGenerated?.(newQuiz);
+      }
+    } catch (error) {
+      console.error('Error generating quiz:', error);
+    } finally {
+      setGeneratingQuiz(false);
+    }
   };
 
   const renderTab = (tab: Tab, label: string, icon: string) => (
@@ -423,11 +442,40 @@ export default function LearningPanel({
   );
 
   const renderQuizContent = () => {
-    if (!quiz) return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>No quiz available for this video.</Text>
-      </View>
-    );
+    if (generatingQuiz) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={[styles.emptyStateText, { marginTop: 20 }]}>
+            Generating quiz...
+          </Text>
+        </View>
+      );
+    }
+
+    if (!quiz) {
+      if (transcriptionStatus !== 'completed') {
+        return (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>
+              Quiz generation will be available once the video transcription is complete.
+            </Text>
+          </View>
+        );
+      }
+
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No quiz available for this video.</Text>
+          <TouchableOpacity 
+            style={styles.generateButton}
+            onPress={handleGenerateQuiz}
+          >
+            <Text style={styles.generateButtonText}>Generate Quiz</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     
     return (
       <QuizPanel
@@ -749,5 +797,17 @@ const styles = StyleSheet.create({
   emptyStateText: {
     color: '#fff',
     fontSize: 16,
+  },
+  generateButton: {
+    backgroundColor: '#333',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  generateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 

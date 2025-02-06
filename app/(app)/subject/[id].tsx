@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -11,13 +11,16 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Subject, Concept, Video, VideoSummary } from '../../../types/video';
+import { Subject, Concept, VideoSummary, Quiz, QuizAttempt } from '../../../types/video';
+import type { Video } from '../../../types/video';
 import { SubjectService } from '../../../services/firebase/subjects';
 import { VideoService } from '../../../services/firebase/video';
 import { auth } from '../../../services/firebase';
 import VideoThumbnail from '../../../components/VideoThumbnail';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
+import QuizPanel from '../../../components/QuizPanel';
+import { getLastQuizAttempt } from '../../../services/firebase/learning';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
@@ -46,10 +49,23 @@ type Note = {
   userId: string;
 };
 
+interface VideoWithQuiz {
+  id: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  duration: number;
+  createdAt: Date;
+  conceptIds: string[];
+  viewCount: number;
+  authorName: string;
+  quiz?: Quiz;
+}
+
 export default function SubjectDetailScreen() {
   const { id } = useLocalSearchParams();
   const [subject, setSubject] = useState<Subject | null>(null);
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [videos, setVideos] = useState<VideoWithQuiz[]>([]);
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +84,8 @@ export default function SubjectDetailScreen() {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [expandedSummaryRows, setExpandedSummaryRows] = useState<Set<string>>(new Set());
   const [expandedReflectionRows, setExpandedReflectionRows] = useState<Set<string>>(new Set());
+  const [expandedQuizzes, setExpandedQuizzes] = useState<Set<string>>(new Set());
+  const [quizAttempts, setQuizAttempts] = useState<Record<string, QuizAttempt | null>>({});
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -88,6 +106,12 @@ export default function SubjectDetailScreen() {
       loadNotes();
     }
   }, [activeTab, videos]);
+
+  useEffect(() => {
+    if (auth.currentUser) {
+      loadQuizAttempts();
+    }
+  }, []);
 
   const loadAllSummaries = async () => {
     try {
@@ -152,43 +176,37 @@ export default function SubjectDetailScreen() {
     }
   };
 
-  const filterContent = () => {
-    const filterVideos = (videoList: Video[]) => {
-      return videoList.filter(video => {
-        // Search query filter
-        const matchesSearch = filterOptions.searchQuery === '' ||
-          video.title.toLowerCase().includes(filterOptions.searchQuery.toLowerCase()) ||
-          video.description.toLowerCase().includes(filterOptions.searchQuery.toLowerCase());
+  const filterContent = useCallback(() => {
+    if (!videos) return [];
 
-        // Concept filter
-        const matchesConcepts = filterOptions.conceptFilter.length === 0 ||
-          video.conceptIds.some(id => filterOptions.conceptFilter.includes(id));
+    return videos.filter(video => {
+      const matchesSearch = filterOptions.searchQuery === '' ||
+        video.title.toLowerCase().includes(filterOptions.searchQuery.toLowerCase()) ||
+        video.description.toLowerCase().includes(filterOptions.searchQuery.toLowerCase());
 
-        return matchesSearch && matchesConcepts;
-      }).sort((a, b) => {
-        // Sort based on selected option
-        switch (filterOptions.sortBy) {
-          case 'date':
-            return filterOptions.sortOrder === 'desc' 
-              ? b.createdAt.getTime() - a.createdAt.getTime()
-              : a.createdAt.getTime() - b.createdAt.getTime();
-          case 'title':
-            return filterOptions.sortOrder === 'desc'
-              ? b.title.localeCompare(a.title)
-              : a.title.localeCompare(b.title);
-          case 'views':
-            return filterOptions.sortOrder === 'desc'
-              ? b.viewCount - a.viewCount
-              : a.viewCount - b.viewCount;
-          default:
-            return 0;
-        }
-      });
-    };
+      const matchesConcepts = filterOptions.conceptFilter.length === 0 ||
+        video.conceptIds.some(id => filterOptions.conceptFilter.includes(id));
 
-    setFilteredVideos(filterVideos(videos));
-    setFilteredSavedVideos(filterVideos(savedVideos));
-  };
+      return matchesSearch && matchesConcepts;
+    }).sort((a, b) => {
+      switch (filterOptions.sortBy) {
+        case 'date':
+          return filterOptions.sortOrder === 'desc' 
+            ? b.createdAt.getTime() - a.createdAt.getTime()
+            : a.createdAt.getTime() - b.createdAt.getTime();
+        case 'title':
+          return filterOptions.sortOrder === 'desc'
+            ? b.title.localeCompare(a.title)
+            : a.title.localeCompare(b.title);
+        case 'views':
+          return filterOptions.sortOrder === 'desc'
+            ? b.viewCount - a.viewCount
+            : a.viewCount - b.viewCount;
+        default:
+          return 0;
+      }
+    });
+  }, [videos, filterOptions]);
 
   const loadNotes = async () => {
     if (!auth.currentUser) return;
@@ -216,6 +234,28 @@ export default function SubjectDetailScreen() {
     } finally {
       setLoadingNotes(false);
     }
+  };
+
+  const loadQuizAttempts = async () => {
+    if (!auth.currentUser) return;
+    
+    const videos = filterContent();
+    if (!videos) return;
+
+    const attempts: Record<string, QuizAttempt | null> = {};
+    
+    for (const video of videos) {
+      if (video.quiz) {
+        const attempt = await getLastQuizAttempt(auth.currentUser.uid, video.quiz.id);
+        if (attempt) {
+          attempts[video.id] = attempt;
+        } else {
+          attempts[video.id] = null;
+        }
+      }
+    }
+    
+    setQuizAttempts(attempts);
   };
 
   const renderProgressBar = (progress: number) => (
@@ -693,31 +733,113 @@ export default function SubjectDetailScreen() {
     );
   };
 
-  const renderQuizzesTab = () => (
-    <View style={styles.quizzesContainer}>
-      <View style={styles.tableContainer}>
-        <View style={styles.tableHeader}>
-          <View style={[styles.tableHeaderCell, { flex: 2 }]}>
-            <Text style={styles.tableHeaderText}>Quiz Title</Text>
-          </View>
-          <View style={[styles.tableHeaderCell, { flex: 1 }]}>
-            <Text style={styles.tableHeaderText}>Status</Text>
-          </View>
-          <View style={[styles.tableHeaderCell, { flex: 1 }]}>
-            <Text style={styles.tableHeaderText}>Score</Text>
-          </View>
-        </View>
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date);
+  };
 
-        <View style={styles.comingSoon}>
-          <Ionicons name="school-outline" size={48} color="#666" />
-          <Text style={styles.comingSoonTitle}>Quizzes Coming Soon</Text>
-          <Text style={styles.comingSoonText}>
-            Test your knowledge with interactive quizzes for each video and concept
-          </Text>
+  const toggleQuizRow = useCallback((videoId: string) => {
+    setExpandedQuizzes(prev => {
+      const next = new Set(prev);
+      if (next.has(videoId)) {
+        next.delete(videoId);
+      } else {
+        next.add(videoId);
+      }
+      return next;
+    });
+  }, []);
+
+  const renderQuizzesTab = () => {
+    const filteredVideos = filterContent().filter(video => video.quiz);
+
+    if (filteredVideos.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No quizzes available for this subject</Text>
         </View>
+      );
+    }
+
+    return (
+      <View style={styles.tabContent}>
+        {renderSearchBar()}
+        {renderFilterOptions()}
+        
+        <ScrollView style={styles.scrollContent}>
+          {filteredVideos.map((video) => {
+            const attempt = quizAttempts[video.id];
+            const score = attempt?.score ?? 0;
+            const quiz = video.quiz;
+            
+            if (!quiz) return null;
+            
+            return (
+              <View key={video.id} style={styles.contentRow}>
+                <TouchableOpacity
+                  style={styles.rowHeader}
+                  onPress={() => toggleQuizRow(video.id)}
+                >
+                  <View style={styles.rowHeaderContent}>
+                    <Text style={styles.rowTitle}>{video.title}</Text>
+                    <View style={styles.rowMeta}>
+                      <Text style={styles.rowMetaText}>
+                        {quiz.questions.length} questions
+                      </Text>
+                      {auth.currentUser && quizAttempts[video.id] !== undefined && (
+                        <Text style={[
+                          styles.rowMetaText,
+                          score >= 80 && styles.highScore,
+                          score >= 60 && score < 80 && styles.mediumScore,
+                          score < 60 && styles.lowScore,
+                        ]}>
+                          {attempt 
+                            ? ` • Last attempt: ${formatDate(attempt.completedAt)} (${Math.round(score)}%)`
+                            : ' • Not attempted'}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Ionicons
+                    name={expandedQuizzes.has(video.id) ? 'chevron-up' : 'chevron-down'}
+                    size={24}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+
+                {expandedQuizzes.has(video.id) && (
+                  <View style={styles.expandedContent}>
+                    <QuizPanel
+                      quiz={quiz}
+                      videoId={video.id}
+                      onComplete={async (score) => {
+                        if (auth.currentUser) {
+                          setQuizAttempts(prev => ({
+                            ...prev,
+                            [video.id]: {
+                              id: `${quiz.id}_${Date.now()}`,
+                              userId: auth.currentUser!.uid,
+                              quizId: quiz.id,
+                              score,
+                              completedAt: new Date(),
+                              answers: []
+                            }
+                          }));
+                        }
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -1217,5 +1339,55 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
+  },
+  contentRow: {
+    backgroundColor: '#222',
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  rowHeaderContent: {
+    flex: 1,
+    marginRight: 16,
+  },
+  rowTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowMetaText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  tabContent: {
+    flex: 1,
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  emptyStateText: {
+    color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  highScore: {
+    color: '#4CAF50',
+  },
+  mediumScore: {
+    color: '#FFC107',
+  },
+  lowScore: {
+    color: '#f44336',
   },
 }); 

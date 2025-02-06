@@ -184,3 +184,321 @@ export const generateVideoSummary = onCall(
     }
   },
 );
+
+interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+  explanation: string;
+}
+
+interface Quiz {
+  id: string;
+  videoId: string;
+  questions: QuizQuestion[];
+}
+
+interface GenerateQuizRequest {
+  videoId: string;
+  transcription: string;
+}
+
+/**
+ * Attempts to parse an OpenAI response into a valid quiz format.
+ * Handles multiple possible response formats and extracts valid questions.
+ * @param {unknown} response - The response from OpenAI to parse
+ * @return {QuizQuestion[]} An array of valid quiz questions
+ */
+function parseQuizResponse(response: unknown): QuizQuestion[] {
+  logger.info("Attempting to parse quiz response");
+
+  if (isQuizResponse(response)) {
+    const validQuestions = response.questions.filter(isValidQuestion);
+    if (validQuestions.length > 0) {
+      logger.info("Found valid questions in expected format");
+      return validQuestions;
+    }
+  }
+
+  if (Array.isArray(response)) {
+    const validQuestions = response.filter(isValidQuestion);
+    if (validQuestions.length > 0) {
+      logger.info("Found valid questions in array format");
+      return validQuestions;
+    }
+  }
+
+  if (typeof response === "string" || hasContent(response)) {
+    const content = hasContent(response) ? response.content : response;
+    const questions: QuizQuestion[] = [];
+    const questionBlocks = content.split(/Question \d+:|Q\d+:/);
+
+    for (const block of questionBlocks) {
+      if (!block.trim()) continue;
+      try {
+        const parsedQuestion = parseQuestionBlock(block);
+        if (parsedQuestion) {
+          questions.push({
+            id: `q${questions.length + 1}`,
+            ...parsedQuestion,
+          });
+        }
+      } catch (error) {
+        logger.warn("Failed to parse question block:", error);
+        continue;
+      }
+    }
+
+    if (questions.length > 0) {
+      logger.info("Successfully extracted questions from text format");
+      return questions;
+    }
+  }
+
+  logger.error("Could not parse response into valid quiz format:", response);
+  throw new Error("Could not parse response into valid quiz format");
+}
+
+interface QuizResponse {
+  questions: unknown[];
+}
+
+/**
+ * Type guard to check if a value is a QuizResponse.
+ * @param {unknown} value - The value to check
+ * @return {boolean} True if the value is a QuizResponse
+ */
+function isQuizResponse(value: unknown): value is QuizResponse {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "questions" in value &&
+    Array.isArray((value as QuizResponse).questions)
+  );
+}
+
+/**
+ * Type guard to check if a value has a content property.
+ * @param {unknown} value - The value to check
+ * @return {boolean} True if the value has a content property
+ */
+function hasContent(value: unknown): value is { content: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "content" in value &&
+    typeof (value as { content: string }).content === "string"
+  );
+}
+
+/**
+ * Type guard to check if a value is a valid QuizQuestion.
+ * @param {unknown} q - The value to check
+ * @return {boolean} True if the value is a valid QuizQuestion
+ */
+function isValidQuestion(q: unknown): q is QuizQuestion {
+  return (
+    typeof q === "object" &&
+    q !== null &&
+    "question" in q &&
+    typeof (q as QuizQuestion).question === "string" &&
+    "options" in q &&
+    Array.isArray((q as QuizQuestion).options) &&
+    (q as QuizQuestion).options.length === 4 &&
+    "correctOptionIndex" in q &&
+    typeof (q as QuizQuestion).correctOptionIndex === "number" &&
+    (q as QuizQuestion).correctOptionIndex >= 0 &&
+    (q as QuizQuestion).correctOptionIndex <= 3 &&
+    "explanation" in q &&
+    typeof (q as QuizQuestion).explanation === "string"
+  );
+}
+
+interface ParsedQuestion {
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+  explanation: string;
+}
+
+/**
+ * Parses a block of text into a quiz question.
+ * @param {string} block - The text block to parse
+ * @return {ParsedQuestion | null} The parsed question or null if invalid
+ */
+function parseQuestionBlock(block: string): ParsedQuestion | null {
+  const questionMatch = block.match(/^([^\n]+)/);
+  const optionsMatch = block.match(/(?:[A-D][\s)]+([^\n]+))/g);
+  const correctMatch = block.match(
+    /(?:Correct Answer|Answer|Index):?\s*([A-D]|[0-3])/i
+  );
+  const explanationMatch = block.match(/(?:Explanation|Reason):?\s*([^\n]+)/i);
+
+  if (!questionMatch || !optionsMatch?.length || !correctMatch) {
+    return null;
+  }
+
+  const question = questionMatch[1].trim();
+  const options = optionsMatch.map((opt: string) =>
+    opt.replace(/^[A-D][\s)]+/, "").trim()
+  );
+  const correctOption = correctMatch[1].trim();
+  const correctOptionIndex = isNaN(Number(correctOption)) ?
+    "ABCD".indexOf(correctOption) :
+    Number(correctOption);
+  const explanation = explanationMatch ?
+    explanationMatch[1].trim() :
+    "Correct answer based on video content";
+
+  if (correctOptionIndex >= 0 && correctOptionIndex <= 3) {
+    return {
+      question,
+      options,
+      correctOptionIndex,
+      explanation,
+    };
+  }
+
+  return null;
+}
+
+export const generateQuiz = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateQuizRequest>) => {
+    try {
+      const {videoId, transcription} = request.data;
+
+      if (!videoId || !transcription) {
+        throw new Error(
+          "Missing required parameters: videoId and transcription",
+        );
+      }
+
+      logger.info("Starting quiz generation for video:", videoId);
+      logger.info("Transcription length:", transcription.length);
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        logger.error("OpenAI API key is not set");
+        throw new Error("OpenAI API key is not configured");
+      }
+
+      // Initialize OpenAI client with the secret at runtime
+      const openai = new OpenAI({
+        apiKey: apiKey,
+      });
+
+      logger.info("OpenAI client initialized");
+
+      // Prepare the prompt for GPT
+      const prompt = [
+        "Generate a quiz based on the following video transcription.",
+        "The quiz should test understanding of key concepts and details.",
+        "Create 5 multiple-choice questions, each with 4 options.",
+        "For each question, provide:",
+        "1. A clear question",
+        "2. Four options (with one correct answer)",
+        "3. The index of the correct option (0-3)",
+        "4. A brief explanation of why the answer is correct",
+        "",
+        "Return a JSON object with this exact structure:",
+        "{",
+        "  \"questions\": [",
+        "    {",
+        "      \"question\": \"string\",",
+        "      \"options\": [\"string\", \"string\", \"string\", \"string\"],",
+        "      \"correctOptionIndex\": number,",
+        "      \"explanation\": \"string\"",
+        "    }",
+        "  ]",
+        "}",
+        "",
+        "Transcription:",
+        transcription,
+      ].join("\n");
+
+      logger.info("Calling OpenAI API for quiz generation...");
+
+      // Call OpenAI API
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You are an expert at creating educational assessments.",
+              "Always return valid JSON matching the exact",
+              "structure requested.",
+            ].join(" "),
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: {
+          type: "json_object",
+        },
+      });
+
+      logger.info("Received response from OpenAI");
+
+      const response = completion.choices[0].message.content;
+      if (!response) {
+        throw new Error("Failed to get response from OpenAI");
+      }
+
+      logger.info("Processing OpenAI response");
+
+      // Parse the response
+      const parsedResponse = JSON.parse(response);
+      logger.info("Parsed response:", parsedResponse);
+
+      // Try to parse the response into our expected format
+      const questions = parseQuizResponse(parsedResponse);
+
+      // Ensure we have at least 3 valid questions
+      if (questions.length < 3) {
+        logger.error("Not enough valid questions found:", questions);
+        throw new Error("Not enough valid questions generated");
+      }
+
+      const quiz: Quiz = {
+        id: `quiz_${videoId}`,
+        videoId,
+        questions: questions.slice(0, 5), // Take up to 5 questions
+      };
+
+      logger.info("Successfully generated quiz:", quiz);
+
+      return quiz;
+    } catch (error) {
+      logger.error("Error in generateQuiz:", error);
+      if (error instanceof OpenAI.APIError) {
+        logger.error("OpenAI API Error:", {
+          status: error.status,
+          message: error.message,
+          type: error.type,
+        });
+        // Provide more specific error messages based on OpenAI error types
+        if (error.status === 401) {
+          throw new Error("Authentication error: Invalid OpenAI API key");
+        } else if (error.status === 429) {
+          throw new Error("Rate limit exceeded: Too many requests to OpenAI");
+        } else if (error.status === 500) {
+          throw new Error("OpenAI service error: Please try again later");
+        }
+      }
+      throw error;
+    }
+  },
+);
