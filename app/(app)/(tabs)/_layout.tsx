@@ -7,8 +7,8 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#000',
-          borderTopColor: '#222',
+          backgroundColor: '#111',
+          borderTopColor: '#333',
         },
         tabBarActiveTintColor: '#fff',
         tabBarInactiveTintColor: '#666',
@@ -24,11 +24,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="search"
+        name="subjects"
         options={{
-          title: 'Search',
+          title: 'Subjects',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" size={size} color={color} />
+            <Ionicons name="library-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="learning"
+        options={{
+          title: 'My Learning',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="school-outline" size={size} color={color} />
           ),
         }}
       />

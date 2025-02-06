@@ -1,0 +1,170 @@
+---
+description: Design Doc
+globs: 
+---
+
+# Tiktok for Learners Design Doc
+---
+
+## Navigation Structure
+The app features a hierarchical navigation system designed for systematic learning:
+
+```
+Main Navigation
+├── Home Feed (Personalized recommendations)
+├── Subjects (Knowledge categories)
+├── My Learning (Personal dashboard)
+└── Profile (User settings & achievements)
+```
+
+## UI Components & Layouts
+
+### 1. Subjects Tab
+```
+┌──────────────────────────────────────────────┐
+│ 🔍 Search Subjects                           │
+├──────────────────────┬───────────────────────┤
+│ Philosophy          │ Programming           │
+│ ▓▓▓▓▓▓░░░ 67%      │ ▓▓▓░░░░░░ 34%        │
+│ 12 videos watched   │ 8 videos watched      │
+│ [Knowledge Graph]   │ [Knowledge Graph]     │
+└──────────────────────┴───────────────────────┘
+```
+
+Features:
+- Grid/List view of subject categories
+- Progress visualization
+- Quick stats (videos watched, mastery level)
+- Mini knowledge graph preview
+
+### 2. Subject Dashboard
+```
+┌──────────────────────────────────────────────┐
+│ Philosophy                                   │
+│ ▓▓▓▓▓▓░░░ 67% Complete                      │
+├──────────────────────────────────────────────┤
+│ [Knowledge Graph Visualization]              │
+│                                             │
+│ Core Concepts:                              │
+│ ● Stoicism (Mastered)                       │
+│ ● Epistemology (In Progress)                │
+│ ● Ethics (Not Started)                      │
+└──────────────────────────────────────────────┘
+```
+
+Features:
+- Detailed progress metrics
+- Interactive knowledge graph
+- Core concepts mastery tracking
+- Learning path recommendations
+- Recent activity log
+
+### 3. My Learning Dashboard
+```
+┌──────────────────────────────────────────────┐
+│ Learning Overview                            │
+│ 🎯 Weekly Goal: 8/10 hours completed         │
+├──────────────────────────────────────────────┤
+│ Active Subjects:                            │
+│ Philosophy    ▓▓▓▓▓▓░░░ 67%                 │
+│ Programming   ▓▓▓░░░░░░ 34%                 │
+└──────────────────────────────────────────────┘
+```
+
+Features:
+- Progress overview across subjects
+- Learning goals & streaks
+- Recent insights
+- Study time analytics
+
+## Data Models
+
+### Subject
+```typescript
+interface Subject {
+  id: string;
+  name: string;
+  description: string;
+  progress: number;
+  concepts: Concept[];
+  prerequisites: string[];
+  videosCount: number;
+  completedVideos: number;
+  knowledgeGraph: GraphData;
+}
+```
+
+### UserProgress
+```typescript
+interface UserProgress {
+  userId: string;
+  subjects: {
+    [subjectId: string]: {
+      progress: number;
+      lastActivity: Date;
+      completedVideos: string[];
+      masteredConcepts: string[];
+      quizScores: {
+        [quizId: string]: number;
+      };
+      reflections: Reflection[];
+    }
+  };
+  learningStreak: number;
+  totalStudyTime: number;
+  weeklyGoals: {
+    target: number;
+    achieved: number;
+  };
+}
+```
+
+## Firebase Implementation
+
+### Collections
+1. subjects
+   - Subject metadata
+   - Knowledge graph data
+   - Core concepts
+
+2. userProgress
+   - Learning progress
+   - Activity history
+   - Achievement data
+
+3. conceptMastery
+   - User-specific concept mastery
+   - Learning pathways
+   - Prerequisites tracking
+
+### Cloud Functions
+1. updateUserProgress
+   - Tracks video completion
+   - Updates mastery levels
+   - Maintains learning streaks
+
+2. generateInsights
+   - Analyzes learning patterns
+   - Suggests next steps
+   - Identifies knowledge gaps
+
+3. updateKnowledgeGraph
+   - Maintains concept relationships
+   - Updates prerequisite chains
+   - Tracks mastery dependencies
+
+## Success Metrics
+- User engagement (time spent learning)
+- Completion rates
+- Knowledge retention (quiz scores)
+- User satisfaction
+- Learning streak maintenance
+
+## INTJ-Specific Features
+- Systematic organization of knowledge
+- Clear progress metrics
+- Deep subject exploration
+- Cross-topic connections
+- Clean, focused interface
+- Structured learning paths
+- Analytical insights
