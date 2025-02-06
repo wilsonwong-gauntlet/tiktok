@@ -14,11 +14,13 @@ import { SubjectService } from '../../../services/firebase/subjects';
 import { VideoService } from '../../../services/firebase/video';
 import { auth } from '../../../services/firebase';
 import VideoThumbnail from '../../../components/VideoThumbnail';
+import { collection, doc, getDoc } from 'firebase/firestore';
 
 export default function SubjectDetailScreen() {
   const { id } = useLocalSearchParams();
   const [subject, setSubject] = useState<Subject | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,17 +35,33 @@ export default function SubjectDetailScreen() {
       setLoading(true);
       setError(null);
       
+      console.log('Loading subject and videos for:', {
+        subjectId: id,
+        userId: auth.currentUser.uid
+      });
+
       // Load subject data
       const subjectData = await SubjectService.getSubjectById(id as string, auth.currentUser.uid);
       if (!subjectData) {
         setError('Subject not found');
         return;
       }
+      console.log('Loaded subject:', subjectData);
       setSubject(subjectData);
 
-      // Load related videos
+      // Load all related videos
       const subjectVideos = await VideoService.getVideosBySubject(id as string);
+      console.log('Loaded subject videos:', subjectVideos);
       setVideos(subjectVideos);
+
+      // Load saved videos for this subject
+      const savedVideoIds = await VideoService.getSavedVideoIds(auth.currentUser.uid);
+      console.log('Loaded saved video IDs:', savedVideoIds);
+      
+      const savedSubjectVideos = subjectVideos.filter(video => savedVideoIds.includes(video.id));
+      console.log('Filtered saved subject videos:', savedSubjectVideos);
+      setSavedVideos(savedSubjectVideos);
+
     } catch (error) {
       console.error('Error loading subject:', error);
       setError('Failed to load subject');
@@ -162,6 +180,15 @@ export default function SubjectDetailScreen() {
           </Text>
         </View>
 
+        {savedVideos.length > 0 && (
+          <View style={styles.savedVideosSection}>
+            <Text style={styles.sectionTitle}>Saved Videos</Text>
+            <View style={styles.videoGrid}>
+              {savedVideos.map(renderVideo)}
+            </View>
+          </View>
+        )}
+
         <View style={styles.graphSection}>
           <Text style={styles.sectionTitle}>Knowledge Graph</Text>
           <View style={styles.graphPlaceholder}>
@@ -175,7 +202,7 @@ export default function SubjectDetailScreen() {
         </View>
 
         <View style={styles.videosSection}>
-          <Text style={styles.sectionTitle}>Videos</Text>
+          <Text style={styles.sectionTitle}>All Videos</Text>
           {videos.length > 0 ? (
             <View style={styles.videoGrid}>
               {videos.map(renderVideo)}
@@ -381,5 +408,8 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#666',
     fontSize: 16,
+  },
+  savedVideosSection: {
+    marginBottom: 24,
   },
 }); 

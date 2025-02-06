@@ -617,4 +617,26 @@ export class VideoService {
       throw error;
     }
   }
+
+  static async getSavedVideoIds(userId: string): Promise<string[]> {
+    try {
+      // Get the savedVideos subcollection
+      const savedVideosRef = collection(db, 'users', userId, 'savedVideos');
+      const snapshot = await getDocs(savedVideosRef);
+      
+      console.log('Saved videos snapshot:', {
+        size: snapshot.size,
+        docs: snapshot.docs.map(doc => ({
+          id: doc.id,
+          data: doc.data()
+        }))
+      });
+
+      // Extract video IDs from the documents
+      return snapshot.docs.map(doc => doc.data().videoId);
+    } catch (error) {
+      console.error('Error fetching saved video IDs:', error);
+      throw error;
+    }
+  }
 } 
