@@ -5,12 +5,14 @@ import { VideoService } from '../../../services/firebase/video';
 import VideoCard from '../../../components/VideoCard';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { height: WINDOW_HEIGHT } = Dimensions.get('window');
+const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
-const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
+const HEADER_HEIGHT = 47; // Standard header height
 
 export default function Home() {
+  const insets = useSafeAreaInsets();
   const { videoId } = useLocalSearchParams<{ videoId: string }>();
   const [feedState, setFeedState] = useState<VideoFeed>({
     videos: [],
@@ -19,6 +21,9 @@ export default function Home() {
   });
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<any> | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Calculate screen height accounting for only tab bar and safe areas
+  const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT - insets.bottom;
 
   useEffect(() => {
     loadVideos();
@@ -81,12 +86,14 @@ export default function Home() {
   }), []);
 
   const renderVideo = ({ item, index }: { item: Video; index: number }) => (
-    <VideoCard video={item} isActive={index === currentIndex} />
+    <View style={[styles.videoContainer, { height: SCREEN_HEIGHT }]}>
+      <VideoCard video={item} isActive={index === currentIndex} />
+    </View>
   );
 
   if (feedState.loading && !feedState.videos.length) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.centerContainer, { paddingBottom: insets.bottom }]}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
@@ -94,7 +101,7 @@ export default function Home() {
 
   if (feedState.error && !feedState.videos.length) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.centerContainer, { paddingBottom: insets.bottom }]}>
         <Text style={styles.errorText}>{feedState.error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => loadVideos()}>
           <Text style={styles.retryText}>Retry</Text>
@@ -108,7 +115,7 @@ export default function Home() {
 
   if (!feedState.videos.length) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.centerContainer, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity style={styles.retryButton} onPress={handleAddSampleVideos}>
           <Text style={styles.retryText}>Add Sample Videos</Text>
         </TouchableOpacity>
@@ -142,7 +149,7 @@ export default function Home() {
         initialNumToRender={2}
         ListFooterComponent={() =>
           feedState.loading ? (
-            <View style={styles.footer}>
+            <View style={[styles.footer, { height: SCREEN_HEIGHT }]}>
               <ActivityIndicator color="#fff" />
             </View>
           ) : null
@@ -157,6 +164,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  videoContainer: {
+    width: WINDOW_WIDTH,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -169,7 +182,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   footer: {
-    height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },

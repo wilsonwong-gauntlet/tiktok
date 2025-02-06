@@ -8,6 +8,7 @@ import { useEvent } from 'expo';
 import LearningPanel from './LearningPanel';
 import CommentSection from './CommentSection';
 import { useVideoSave } from '../contexts/VideoSaveContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface VideoCardProps {
   video: VideoType;
@@ -20,6 +21,7 @@ const TAB_BAR_HEIGHT = 49; // Standard tab bar height
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
 export default function VideoCard({ video, isActive, containerHeight }: VideoCardProps) {
+  const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState(false);
   const [learningPanelVisible, setLearningPanelVisible] = useState(false);
   const [commentSectionVisible, setCommentSectionVisible] = useState(false);
@@ -177,14 +179,17 @@ export default function VideoCard({ video, isActive, containerHeight }: VideoCar
 const styles = StyleSheet.create({
   container: {
     width: WINDOW_WIDTH,
-    height: SCREEN_HEIGHT,
+    height: '100%',
     backgroundColor: '#000',
   },
   videoContainer: {
     flex: 1,
+    backgroundColor: '#000',
   },
   video: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
