@@ -10,7 +10,6 @@ const sampleVideos = [
     thumbnailUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
     duration: 120,
     createdAt: new Date(),
-    category: 'Technology',
     tags: ['machine learning', 'AI', 'technology'],
     aiSummary: 'This video covers the basics of machine learning, including supervised and unsupervised learning.',
     searchableText: [
@@ -78,7 +77,6 @@ const sampleVideos = [
     thumbnailUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
     duration: 180,
     createdAt: new Date(),
-    category: 'Physics',
     tags: ['quantum computing', 'physics', 'technology'],
     aiSummary: 'An exploration of quantum computing fundamentals and their potential impact.',
     searchableText: [

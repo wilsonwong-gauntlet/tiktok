@@ -292,7 +292,6 @@ export class VideoService {
   static async searchVideos(
     searchText: string,
     filters: {
-      category?: string;
       tags?: string[];
     },
     sort: {
@@ -311,11 +310,6 @@ export class VideoService {
         queryConstraints.push(
           where('searchableText', 'array-contains', lowercaseQuery)
         );
-      }
-
-      // Add category filter
-      if (filters.category) {
-        queryConstraints.push(where('category', '==', filters.category));
       }
 
       // Add tags filter
@@ -348,26 +342,6 @@ export class VideoService {
       };
     } catch (error) {
       console.error('Error searching videos:', error);
-      throw error;
-    }
-  }
-
-  static async getCategories(): Promise<string[]> {
-    try {
-      const videosRef = collection(db, VIDEOS_COLLECTION);
-      const snapshot = await getDocs(videosRef);
-      const categories = new Set<string>();
-      
-      snapshot.docs.forEach(doc => {
-        const category = doc.data().category;
-        if (category) {
-          categories.add(category);
-        }
-      });
-
-      return Array.from(categories).sort();
-    } catch (error) {
-      console.error('Error getting categories:', error);
       throw error;
     }
   }

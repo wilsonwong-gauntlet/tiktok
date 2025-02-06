@@ -3,7 +3,7 @@ import { resolve, basename, join, dirname } from 'path';
 import * as readline from 'readline';
 import ffmpeg from 'fluent-ffmpeg';
 import * as ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import { uploadLocalVideo } from './video-service';
+import { uploadLocalVideo, startTranscription } from './video-service';
 import { config } from 'dotenv';
 import { db, storage } from './firebase-admin';
 import { VideoService } from '../services/firebase/video';
@@ -33,41 +33,12 @@ const question = (query: string): Promise<string> => {
   });
 };
 
-// Common categories and tags for quick selection
-const COMMON_CATEGORIES = [
-  'Technology',
-  'Programming',
-  'Tutorial',
-  'Education',
-  'Entertainment',
-  'Philosophy',
-  'Physics',
-  'Mathematics'
-];
-
-async function selectFromOptions(options: string[], customAllowed = true): Promise<string> {
-  console.log('\nAvailable options:');
-  options.forEach((opt, i) => console.log(`${i + 1}. ${opt}`));
-  if (customAllowed) {
-    console.log('Or enter your own');
-  }
-  const answer = await question('Select option (enter number or custom value): ');
-  const index = parseInt(answer) - 1;
-  if (index >= 0 && index < options.length) {
-    return options[index];
-  }
-  return customAllowed ? answer : options[0];
-}
-
 async function getCommonMetadata() {
   console.log('\nEnter common metadata (will apply to all videos):');
-  console.log('\nSelect category:');
-  const category = await selectFromOptions(COMMON_CATEGORIES);
-  
   const commonTagsInput = await question('\nCommon tags for all videos (comma-separated): ');
   const commonTags = commonTagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
   
-  return { category, commonTags };
+  return { commonTags };
 }
 
 async function generateThumbnail(videoPath: string): Promise<string> {
@@ -258,6 +229,11 @@ async function uploadVideo(videoData: VideoUpload) {
     await batch.commit();
 
     console.log(`Successfully uploaded video ${videoId} and updated relationships`);
+    
+    // Start transcription process
+    console.log('Starting transcription process...');
+    await startTranscription(videoId);
+    
     return videoId;
   } catch (error) {
     console.error('Error uploading video:', error);
@@ -265,7 +241,7 @@ async function uploadVideo(videoData: VideoUpload) {
   }
 }
 
-async function processVideoUpload(filePath: string, commonMetadata?: { category: string; commonTags: string[] }) {
+async function processVideoUpload(filePath: string, commonMetadata?: { commonTags: string[] }) {
   // Generate thumbnail
   console.log(`Generating thumbnail for ${filePath}...`);
   const thumbnailPath = await generateThumbnail(filePath);

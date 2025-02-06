@@ -3,44 +3,91 @@ import { readFileSync } from 'fs';
 import * as admin from 'firebase-admin';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { basename } from 'path';
+import { initializeApp } from 'firebase/app';
+import { config } from 'dotenv';
 
-interface LocalVideoUpload {
+// Load environment variables
+config({ path: join(__dirname, '..', '.env.local') });
+
+interface VideoUpload {
   filePath: string;
   thumbnailPath: string;
   title: string;
   description: string;
-  category: string;
+  subjectId: string;      // Primary subject
+  conceptIds: string[];   // Primary concepts
+  relatedSubjects?: string[];
   tags: string[];
   authorId: string;
   authorName: string;
 }
 
-async function startTranscription(videoId: string) {
+// Initialize Firebase
+const firebaseConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
+};
+
+const app = initializeApp(firebaseConfig);
+
+export async function startTranscription(videoId: string) {
   return new Promise((resolve, reject) => {
     const transcribeScript = join(__dirname, 'transcribe-video.ts');
-    const process = spawn('npx', ['ts-node', transcribeScript, videoId], {
-      stdio: 'inherit'
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        resolve(true);
-      } else {
-        reject(new Error(`Transcription process exited with code ${code}`));
+    console.log('Starting transcription process with script:', transcribeScript);
+    
+    const childProcess = spawn('npx', ['ts-node', transcribeScript, videoId], {
+      stdio: 'pipe',  // Capture all output
+      env: {
+        ...process.env,
+        PATH: process.env.PATH,
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       }
     });
 
-    process.on('error', (err) => {
+    let output = '';
+    let errorOutput = '';
+
+    // Capture output
+    childProcess.stdout?.on('data', (data) => {
+      const message = data.toString();
+      output += message;
+      process.stdout.write(message);  // Forward to parent process
+    });
+
+    childProcess.stderr?.on('data', (data) => {
+      const message = data.toString();
+      errorOutput += message;
+      process.stderr.write(message);  // Forward to parent process
+    });
+
+    childProcess.on('close', (code: number) => {
+      if (code === 0) {
+        console.log('Transcription process completed successfully');
+        resolve(true);
+      } else {
+        const error = new Error(`Transcription process failed with code ${code}.\nOutput: ${output}\nError: ${errorOutput}`);
+        console.error(error.message);
+        reject(error);
+      }
+    });
+
+    childProcess.on('error', (err: Error) => {
+      console.error('Failed to start transcription process:', err);
       reject(err);
     });
   });
 }
 
-export async function uploadLocalVideo(videoData: LocalVideoUpload): Promise<string> {
+export async function uploadLocalVideo(videoData: VideoUpload): Promise<string> {
   try {
     // Create file names for storage
-    const videoFileName = `videos/${Date.now()}-${videoData.filePath.split('/').pop()}`;
-    const thumbnailFileName = `thumbnails/${Date.now()}-${videoData.thumbnailPath.split('/').pop()}`;
+    const videoFileName = `videos/${Date.now()}-${basename(videoData.filePath)}`;
+    const thumbnailFileName = `thumbnails/${Date.now()}-${basename(videoData.thumbnailPath)}`;
 
     // Read and upload the video file
     const videoBuffer = readFileSync(videoData.filePath);
@@ -79,7 +126,9 @@ export async function uploadLocalVideo(videoData: LocalVideoUpload): Promise<str
       thumbnailUrl: thumbnailUrl,
       duration: 0, // TODO: Get video duration
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      category: videoData.category,
+      subjectId: videoData.subjectId,
+      conceptIds: videoData.conceptIds,
+      relatedSubjects: videoData.relatedSubjects || [],
       tags: videoData.tags,
       searchableText: [
         ...videoData.title.toLowerCase().split(' '),
@@ -89,20 +138,26 @@ export async function uploadLocalVideo(videoData: LocalVideoUpload): Promise<str
       viewCount: 0,
       authorId: videoData.authorId,
       authorName: videoData.authorName,
-      transcriptionStatus: 'pending',
+      format: 'video/mp4',
+      transcriptionStatus: 'pending',  // Add initial status
       transcriptionError: null
     };
 
     const docRef = await db.collection('videos').add(videoDoc);
     const videoId = docRef.id;
 
-    // Start transcription process
+    // Start transcription process and wait for it to complete
     console.log('\nStarting transcription process...');
     try {
-      await startTranscription(videoId);
-      console.log('Transcription process started successfully');
+      await startTranscription(videoId);  // This will now wait for completion
+      console.log('Transcription completed successfully');
+      
+      // Update the status one final time to ensure it's marked as completed
+      await docRef.update({
+        transcriptionStatus: 'completed'
+      });
     } catch (error: any) {
-      console.error('Failed to start transcription:', error);
+      console.error('Failed to complete transcription:', error);
       // Update the video document with the error
       await docRef.update({
         transcriptionStatus: 'error',
