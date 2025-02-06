@@ -7,6 +7,7 @@ import { VideoService } from '../services/firebase/video';
 import { auth } from '../services/firebase/index';
 import { Note, Quiz } from '../types/video';
 import VideoSummarySection from './VideoSummarySection';
+import QuizPanel from './QuizPanel';
 
 interface LearningPanelProps {
   visible: boolean;
@@ -422,77 +423,23 @@ export default function LearningPanel({
   );
 
   const renderQuizContent = () => {
-    if (!quiz) return <Text style={styles.contentText}>No quiz available for this video.</Text>;
+    if (!quiz) return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyStateText}>No quiz available for this video.</Text>
+      </View>
+    );
     
-    if (quizSubmitted) {
-      return (
-        <ScrollView style={styles.content}>
-          <Text style={styles.quizScore}>Your Score: {quizScore}%</Text>
-          {quiz.questions.map((question, index) => (
-            <View key={index} style={styles.questionReview}>
-              <Text style={styles.questionText}>{question.question}</Text>
-              {question.options.map((option, optionIndex) => (
-                <View 
-                  key={optionIndex} 
-                  style={[
-                    styles.option,
-                    quizAnswers[index] === optionIndex && styles.selectedOption,
-                    optionIndex === question.correctOptionIndex && styles.correctOption,
-                  ]}
-                >
-                  <Text style={styles.optionText}>{option}</Text>
-                </View>
-              ))}
-              <Text style={styles.explanation}>{question.explanation}</Text>
-            </View>
-          ))}
-          <TouchableOpacity 
-            style={styles.button}
-            onPress={() => {
-              setQuizSubmitted(false);
-              setQuizAnswers([]);
-            }}
-          >
-            <Text style={styles.buttonText}>Retake Quiz</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      );
-    }
-
     return (
-      <ScrollView style={styles.content}>
-        {quiz.questions.map((question, index) => (
-          <View key={index} style={styles.question}>
-            <Text style={styles.questionText}>{question.question}</Text>
-            {question.options.map((option, optionIndex) => (
-              <TouchableOpacity
-                key={optionIndex}
-                style={[
-                  styles.option,
-                  quizAnswers[index] === optionIndex && styles.selectedOption,
-                ]}
-                onPress={() => {
-                  const newAnswers = [...quizAnswers];
-                  newAnswers[index] = optionIndex;
-                  setQuizAnswers(newAnswers);
-                }}
-              >
-                <Text style={styles.optionText}>{option}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
-        <TouchableOpacity 
-          style={[
-            styles.button,
-            quizAnswers.length !== quiz.questions.length && styles.buttonDisabled
-          ]}
-          disabled={quizAnswers.length !== quiz.questions.length}
-          onPress={handleQuizSubmit}
-        >
-          <Text style={styles.buttonText}>Submit Quiz</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <QuizPanel
+        quiz={quiz}
+        videoId={videoId}
+        onComplete={(score) => {
+          // Update user progress when quiz is completed
+          if (auth.currentUser) {
+            saveQuizAttempt(auth.currentUser.uid, quiz.id, [], score);
+          }
+        }}
+      />
     );
   };
 
@@ -791,6 +738,16 @@ const styles = StyleSheet.create({
   },
   transcriptionEmptyText: {
     color: '#666',
+    fontSize: 16,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateText: {
+    color: '#fff',
     fontSize: 16,
   },
 }); 
