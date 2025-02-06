@@ -20,7 +20,7 @@ import { Video } from '../../types/video';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCA5xFRAu19FpUTFgXxzWWnyZ3_ZqOYpRs",
+  apiKey: "AIzaSyDyDfr1xAbYeMtiKWyzlgmct3HMSk3qOwg",
   authDomain: "tiktok-3142f.firebaseapp.com",
   projectId: "tiktok-3142f",
   storageBucket: "tiktok-3142f.firebasestorage.app",
