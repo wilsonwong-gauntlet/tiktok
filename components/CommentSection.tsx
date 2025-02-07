@@ -10,6 +10,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Comment } from '../types/video';
@@ -328,7 +329,7 @@ export default function CommentSection({
         </TouchableOpacity>
 
         {summaryExpanded && (
-          <View style={styles.summaryContent}>
+          <ScrollView style={styles.summaryScrollView} contentContainerStyle={styles.summaryContent}>
             <View style={styles.summarySection}>
               <Text style={styles.sectionTitle}>
                 <Ionicons name="chatbubbles-outline" size={16} color="#fff" /> Main Discussion
@@ -366,7 +367,7 @@ export default function CommentSection({
             <Text style={styles.lastUpdated}>
               Last updated: {formatTimestamp(commentSummary.lastUpdated)}
             </Text>
-          </View>
+          </ScrollView>
         )}
       </View>
     );
@@ -668,6 +669,9 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     padding: 4,
+  },
+  summaryScrollView: {
+    maxHeight: 300, // Limit the height to make it scrollable
   },
   summaryContent: {
     padding: 16,
