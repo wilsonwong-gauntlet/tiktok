@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FurtherReading, VideoSummary } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
@@ -8,6 +8,7 @@ import { auth } from '../services/firebase/index';
 import { Note, Quiz } from '../types/video';
 import VideoSummarySection from './VideoSummarySection';
 import QuizPanel from './QuizPanel';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface LearningPanelProps {
   visible: boolean;
@@ -20,6 +21,7 @@ interface LearningPanelProps {
   transcription?: string;
   transcriptionStatus?: 'pending' | 'completed' | 'error';
   onQuizGenerated?: (quiz: Quiz) => void;
+  onFurtherReadingGenerated?: (reading: FurtherReading[]) => void;
 }
 
 type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition' | 'transcription';
@@ -58,6 +60,7 @@ export default function LearningPanel({
   transcription,
   transcriptionStatus,
   onQuizGenerated,
+  onFurtherReadingGenerated,
 }: LearningPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [notes, setNotes] = useState('');
@@ -198,6 +201,56 @@ export default function LearningPanel({
     }
   };
 
+  const handleGenerateFurtherReading = async () => {
+    try {
+      setLoading(true);
+      const functions = getFunctions();
+      const generateFurtherReading = httpsCallable(
+        functions, 
+        'generateFurtherReading',
+        // Set a longer timeout for the function call
+        { timeout: 300000 } // 5 minutes in milliseconds
+      );
+
+      // Show a loading message to the user
+      Alert.alert(
+        'Generating Recommendations',
+        'This may take a few minutes. Please keep the app open.',
+        [{ text: 'OK' }]
+      );
+
+      const result = await generateFurtherReading({
+        videoId,
+        transcription,
+        summary,
+      });
+      
+      // Transform and validate the response data
+      const recommendations = result.data as FurtherReading[];
+      if (Array.isArray(recommendations) && recommendations.length > 0) {
+        console.log('Received recommendations:', recommendations);
+        onFurtherReadingGenerated?.(recommendations);
+        Alert.alert('Success', 'Further reading recommendations have been generated.');
+      } else {
+        console.error('Invalid recommendations format:', result.data);
+        Alert.alert('Error', 'Received invalid recommendations format');
+      }
+    } catch (error: any) {
+      console.error('Error generating further reading:', error);
+      // More specific error messages based on the error type
+      if (error?.message?.includes('timeout')) {
+        Alert.alert(
+          'Request Timeout',
+          'The request is taking longer than expected. The recommendations will appear when ready.'
+        );
+      } else {
+        Alert.alert('Error', 'Failed to generate further reading recommendations');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderTab = (tab: Tab, label: string, icon: string) => (
     <TouchableOpacity
       style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -249,6 +302,48 @@ export default function LearningPanel({
     }
   };
 
+  const renderReadingContent = () => (
+    <View style={styles.tabContent}>
+      {furtherReading ? (
+        <ScrollView style={styles.scrollContent}>
+          {furtherReading.map((resource, index) => (
+            <View key={index} style={styles.resourceCard}>
+              <Text style={styles.resourceTitle}>{resource.title}</Text>
+              <Text style={styles.resourceAuthor}>by {resource.author}</Text>
+              <Text style={styles.resourceDescription}>{resource.description}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      ) : transcriptionStatus === 'completed' ? (
+        <View style={styles.generateContainer}>
+          <Text style={styles.generateText}>
+            Generate reading recommendations based on the video content
+          </Text>
+          <TouchableOpacity
+            style={styles.generateButton}
+            onPress={handleGenerateFurtherReading}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.generateButtonText}>
+                Generate Recommendations
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.waitingContainer}>
+          <ActivityIndicator size="large" color="#666" />
+          <Text style={styles.waitingText}>
+            Waiting for video transcription...
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
@@ -268,18 +363,7 @@ export default function LearningPanel({
       case 'quiz':
         return renderQuizContent();
       case 'reading':
-        return (
-          <ScrollView style={styles.content}>
-            {furtherReading?.map((item, index) => (
-              <View key={index} style={styles.readingItem}>
-                <Text style={styles.readingTitle}>{item.title}</Text>
-                {item.description && (
-                  <Text style={styles.readingDescription}>{item.description}</Text>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        );
+        return renderReadingContent();
       case 'intuition':
         return (
           <ScrollView style={styles.content}>
@@ -809,5 +893,58 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  tabContent: {
+    flex: 1,
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  resourceCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  resourceTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  resourceAuthor: {
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  resourceDescription: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  generateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  generateText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  waitingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  waitingText: {
+    color: '#666',
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 }); 

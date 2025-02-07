@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { Video as VideoType, Subject, Quiz } from '../types/video';
+import { Video as VideoType, Subject, Quiz, FurtherReading } from '../types/video';
 import { auth, saveVideo, unsaveVideo, isVideoSaved } from '../services/firebase/index';
 import { useEvent } from 'expo';
 import LearningPanel from './LearningPanel';
@@ -33,6 +33,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [manuallyPaused, setManuallyPaused] = useState(false);
   const pathname = usePathname();
   const [currentQuiz, setCurrentQuiz] = useState(video.quiz);
+  const [furtherReading, setFurtherReading] = useState(video.furtherReading);
 
   // Reset manual pause when video becomes inactive
   useEffect(() => {
@@ -165,6 +166,11 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     setCurrentQuiz(newQuiz);
   };
 
+  const handleFurtherReadingGenerated = (recommendations: FurtherReading[]) => {
+    console.log('Setting further reading:', recommendations);
+    setFurtherReading(recommendations);
+  };
+
   return (
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
@@ -263,11 +269,12 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         title={video.title}
         videoId={video.id}
         summary={video.summary}
-        furtherReading={video.furtherReading}
+        furtherReading={furtherReading}
         quiz={currentQuiz}
         transcription={video.transcription}
         transcriptionStatus={video.transcriptionStatus}
         onQuizGenerated={handleQuizGenerated}
+        onFurtherReadingGenerated={handleFurtherReadingGenerated}
       />
 
       <CommentSection

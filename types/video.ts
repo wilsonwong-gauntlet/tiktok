@@ -79,8 +79,8 @@ export interface Video {
 
 export interface FurtherReading {
   title: string;
-  url: string;
-  description?: string;
+  author: string;
+  description: string;
 }
 
 export interface VideoFeed {

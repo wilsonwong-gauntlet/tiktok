@@ -502,3 +502,152 @@ export const generateQuiz = onCall(
     }
   },
 );
+
+interface FurtherReading {
+  title: string;
+  author: string;
+  description: string;
+}
+
+interface GenerateFurtherReadingRequest {
+  videoId: string;
+  transcription: string;
+  summary?: VideoSummary;
+}
+
+export const generateFurtherReading = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateFurtherReadingRequest>) => {
+    try {
+      const {videoId, transcription, summary} = request.data;
+
+      if (!videoId || !transcription) {
+        throw new Error(
+          "Missing required parameters: videoId and transcription"
+        );
+      }
+
+      logger.info("Starting further reading generation for video:", videoId);
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        logger.error("OpenAI API key is not set");
+        throw new Error("OpenAI API key is not configured");
+      }
+
+      // Initialize OpenAI client with the secret at runtime
+      const openai = new OpenAI({apiKey});
+
+      logger.info("OpenAI client initialized");
+
+      // Prepare the prompt for GPT
+      const prompt = [
+        "Based on this video transcription, recommend 2-3 foundational books",
+        "or papers that would help someone understand this topic deeply.",
+        "Keep the recommendations concise with just title, author,",
+        "and a brief description.",
+        "",
+        summary ? "Key concepts from the video:" : "",
+        summary ? summary.main_concepts.map((c) => `- ${c}`).join("\n") : "",
+        "",
+        "Transcription:",
+        transcription,
+        "",
+        "Return recommendations in this exact JSON format:",
+        "{",
+        "  \"recommendations\": [",
+        "    {",
+        "      \"title\": \"string (book/paper title)\",",
+        "      \"author\": \"string (author name)\",",
+        "      \"description\": \"string (1-2 sentences about the work)\"",
+        "    }",
+        "  ]",
+        "}",
+      ].join("\n");
+
+      logger.info("Calling OpenAI API for further reading recommendations...");
+
+      // Call OpenAI API
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You are an expert academic librarian and researcher.",
+              "Recommend only high-quality, dense resources that provide deep,",
+              "systematic understanding. Focus on foundational works and",
+              "theoretical frameworks.",
+            ].join(" "),
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: {type: "json_object"},
+      });
+
+      logger.info("Received response from OpenAI");
+
+      const response = completion.choices[0].message.content;
+      if (!response) {
+        throw new Error("Failed to get response from OpenAI");
+      }
+
+      // Parse and validate the response
+      const parsedResponse = JSON.parse(response);
+      if (
+        !parsedResponse.recommendations ||
+        !Array.isArray(parsedResponse.recommendations)
+      ) {
+        throw new Error("Invalid response format");
+      }
+
+      const recommendations =
+        parsedResponse.recommendations as FurtherReading[];
+
+      // Validate each recommendation with proper line breaks
+      const validRecommendations = recommendations.filter((rec) => {
+        return rec.title && rec.author && rec.description;
+      });
+
+      if (validRecommendations.length < 2) {
+        throw new Error("Not enough valid recommendations generated");
+      }
+
+      logger.info(
+        "Successfully generated further reading recommendations:",
+        validRecommendations
+      );
+
+      return validRecommendations;
+    } catch (error) {
+      logger.error("Error in generateFurtherReading:", error);
+      if (error instanceof OpenAI.APIError) {
+        logger.error("OpenAI API Error:", {
+          status: error.status,
+          message: error.message,
+          type: error.type,
+        });
+        // Provide more specific error messages based on OpenAI error types
+        if (error.status === 401) {
+          throw new Error("Authentication error: Invalid OpenAI API key");
+        } else if (error.status === 429) {
+          throw new Error("Rate limit exceeded: Too many requests to OpenAI");
+        } else if (error.status === 500) {
+          throw new Error("OpenAI service error: Please try again later");
+        }
+      }
+      throw error;
+    }
+  },
+);
