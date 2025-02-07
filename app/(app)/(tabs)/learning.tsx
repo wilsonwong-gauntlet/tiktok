@@ -3,23 +3,20 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Subject, UserProgress, FurtherReading } from '../../../types/video';
-import { auth } from '../../../services/firebase';
+import { Subject, UserProgress, FurtherReading, Quiz, QuizAttempt, Note, QuizQuestion } from '../../../types/video';
+import { auth, db } from '../../../services/firebase';
 import { VideoService } from '../../../services/firebase/video';
 import { SubjectService } from '../../../services/firebase/subjects';
 import ReadingList from '../../../components/ReadingList';
 import SavedInsights from '../../../components/SavedInsights';
 import QuizList from '../../../components/QuizList';
 import NotesList from '../../../components/NotesList';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
 
-export default function LearningScreen() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
-  const [activeSubjects, setActiveSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [readings, setReadings] = useState<{
+interface CachedData {
+  readings: {
     [subjectId: string]: {
       subjectName: string;
       resources: {
@@ -28,17 +25,206 @@ export default function LearningScreen() {
         resource: FurtherReading;
       }[];
     };
-  }>({});
+  };
+  quizzes: {
+    id: string;
+    videoId: string;
+    videoTitle: string;
+    subjectName: string;
+    questions: QuizQuestion[];
+    lastAttempt?: QuizAttempt;
+  }[];
+  notes: {
+    id: string;
+    videoId: string;
+    videoTitle: string;
+    subjectName: string;
+    content: string;
+    timestamp: number;
+    createdAt: Date;
+  }[];
+  insights: {
+    videoId: string;
+    summary: string;
+    confusionPoints: string[];
+    valuableInsights: string[];
+    sentiment: string;
+    commentCount: number;
+    savedAt: Date;
+    videoTitle?: string;
+  }[];
+  lastFetched: {
+    readings?: number;
+    quizzes?: number;
+    notes?: number;
+    insights?: number;
+  };
+}
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+export default function LearningScreen() {
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
+  const [activeSubjects, setActiveSubjects] = useState<Subject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cachedData, setCachedData] = useState<CachedData>({
+    readings: {},
+    quizzes: [],
+    notes: [],
+    insights: [],
+    lastFetched: {},
+  });
 
   useEffect(() => {
     loadUserData();
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'reading' && Object.keys(readings).length === 0) {
-      loadReadingResources();
-    }
+    if (!auth.currentUser) return;
+
+    const loadTabData = async () => {
+      if (!auth.currentUser) return; // Double-check auth status before async operations
+      
+      switch (activeTab) {
+        case 'reading':
+          if (shouldFetchData('readings')) {
+            await loadReadingResources();
+          }
+          break;
+        case 'quizzes':
+          if (shouldFetchData('quizzes')) {
+            try {
+              setLoading(true);
+              const videosRef = collection(db, 'videos');
+              const videosSnapshot = await getDocs(query(videosRef, where('quiz', '!=', null)));
+              
+              const attemptsRef = collection(db, 'quizAttempts');
+              const attemptsSnapshot = await getDocs(
+                query(attemptsRef, where('userId', '==', auth.currentUser.uid))
+              );
+              const attempts = new Map(
+                attemptsSnapshot.docs.map(doc => [doc.data().quizId, doc.data() as QuizAttempt])
+              );
+
+              const subjectsRef = collection(db, 'subjects');
+              const subjectsSnapshot = await getDocs(subjectsRef);
+              const subjects = new Map(
+                subjectsSnapshot.docs.map(doc => [doc.id, doc.data().name])
+              );
+
+              const quizzesData = videosSnapshot.docs.map(doc => {
+                const video = doc.data();
+                return {
+                  ...video.quiz,
+                  videoId: doc.id,
+                  videoTitle: video.title,
+                  subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
+                  lastAttempt: attempts.get(video.quiz.id),
+                };
+              });
+
+              updateCache('quizzes', quizzesData);
+            } catch (error) {
+              console.error('Error loading quizzes:', error);
+            } finally {
+              setLoading(false);
+            }
+          }
+          break;
+        case 'notes':
+          if (shouldFetchData('notes')) {
+            try {
+              setLoading(true);
+              const notesRef = collection(db, `users/${auth.currentUser.uid}/notes`);
+              const notesSnapshot = await getDocs(query(notesRef));
+
+              const videoIds = new Set(notesSnapshot.docs.map(doc => doc.data().videoId));
+              const videosRef = collection(db, 'videos');
+              const videosSnapshot = await getDocs(query(videosRef));
+              const videos = new Map(
+                videosSnapshot.docs
+                  .filter(doc => videoIds.has(doc.id))
+                  .map(doc => [doc.id, { title: doc.data().title, subjectId: doc.data().subjectId }])
+              );
+
+              const subjectIds = new Set([...videos.values()].map(v => v.subjectId));
+              const subjectsRef = collection(db, 'subjects');
+              const subjectsSnapshot = await getDocs(subjectsRef);
+              const subjects = new Map(
+                subjectsSnapshot.docs
+                  .filter(doc => subjectIds.has(doc.id))
+                  .map(doc => [doc.id, doc.data().name])
+              );
+
+              const notesData = notesSnapshot.docs.map(doc => {
+                const note = doc.data();
+                const video = videos.get(note.videoId);
+                return {
+                  id: doc.id,
+                  videoId: note.videoId,
+                  videoTitle: video?.title || 'Unknown Video',
+                  subjectName: video ? subjects.get(video.subjectId) || 'Unknown Subject' : 'Unknown Subject',
+                  content: note.content,
+                  timestamp: note.timestamp || 0,
+                  createdAt: note.createdAt?.toDate() || new Date(),
+                };
+              });
+
+              updateCache('notes', notesData);
+            } catch (error) {
+              console.error('Error loading notes:', error);
+            } finally {
+              setLoading(false);
+            }
+          }
+          break;
+        case 'insights':
+          if (shouldFetchData('insights')) {
+            try {
+              setLoading(true);
+              const summariesRef = collection(db, `users/${auth.currentUser.uid}/savedSummaries`);
+              const summariesSnapshot = await getDocs(query(summariesRef));
+              
+              const summaries = summariesSnapshot.docs.map(doc => ({
+                videoId: doc.id,
+                ...doc.data(),
+                savedAt: doc.data().savedAt?.toDate() || new Date(),
+              }));
+
+              updateCache('insights', summaries);
+            } catch (error) {
+              console.error('Error loading insights:', error);
+            } finally {
+              setLoading(false);
+            }
+          }
+          break;
+      }
+    };
+
+    loadTabData();
   }, [activeTab]);
+
+  const shouldFetchData = (dataType: keyof CachedData['lastFetched']): boolean => {
+    const lastFetched = cachedData.lastFetched[dataType];
+    if (!lastFetched) return true;
+    return Date.now() - lastFetched > CACHE_DURATION;
+  };
+
+  const updateCache = (
+    dataType: 'readings' | 'quizzes' | 'notes' | 'insights',
+    data: any
+  ) => {
+    setCachedData(prev => ({
+      ...prev,
+      [dataType]: data,
+      lastFetched: {
+        ...prev.lastFetched,
+        [dataType]: Date.now(),
+      },
+    }));
+  };
 
   const loadUserData = async () => {
     if (!auth.currentUser) return;
@@ -65,7 +251,7 @@ export default function LearningScreen() {
     try {
       setLoading(true);
       const allSubjects = await SubjectService.getAllSubjects();
-      const readingsBySubject: typeof readings = {};
+      const readingsBySubject: CachedData['readings'] = {};
 
       for (const subject of allSubjects) {
         const videos = await VideoService.getVideosBySubject(subject.id);
@@ -87,7 +273,7 @@ export default function LearningScreen() {
         }
       }
 
-      setReadings(readingsBySubject);
+      updateCache('readings', readingsBySubject);
     } catch (error) {
       console.error('Error loading reading resources:', error);
     } finally {
@@ -218,15 +404,35 @@ export default function LearningScreen() {
       case 'overview':
         return renderOverviewTab();
       case 'reading':
-        return <ReadingList readings={readings} onResourcePress={(videoId, resource) => {
-          router.push(`/video/${videoId}?highlight=reading`);
-        }} />;
+        return (
+          <ReadingList 
+            readings={cachedData.readings} 
+            onResourcePress={(videoId, resource) => {
+              router.push(`/video/${videoId}?highlight=reading`);
+            }}
+          />
+        );
       case 'insights':
-        return <SavedInsights />;
+        return (
+          <SavedInsights 
+            cachedInsights={cachedData.insights}
+            onDataLoaded={(insights) => updateCache('insights', insights)}
+          />
+        );
       case 'quizzes':
-        return <QuizList />;
+        return (
+          <QuizList 
+            cachedQuizzes={cachedData.quizzes}
+            onDataLoaded={(quizzes) => updateCache('quizzes', quizzes)}
+          />
+        );
       case 'notes':
-        return <NotesList />;
+        return (
+          <NotesList 
+            cachedNotes={cachedData.notes}
+            onDataLoaded={(notes) => updateCache('notes', notes)}
+          />
+        );
       default:
         return null;
     }

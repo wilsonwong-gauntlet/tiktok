@@ -24,14 +24,21 @@ interface SavedSummary {
   videoTitle?: string;
 }
 
-export default function SavedInsights() {
-  const [savedSummaries, setSavedSummaries] = useState<SavedSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+interface SavedInsightsProps {
+  cachedInsights?: SavedSummary[];
+  onDataLoaded?: (insights: SavedSummary[]) => void;
+}
+
+export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedInsightsProps) {
+  const [savedSummaries, setSavedSummaries] = useState<SavedSummary[]>(cachedInsights || []);
+  const [loading, setLoading] = useState(!cachedInsights);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    loadSavedSummaries();
+    if (!cachedInsights) {
+      loadSavedSummaries();
+    }
   }, []);
 
   const loadSavedSummaries = async () => {
@@ -50,7 +57,9 @@ export default function SavedInsights() {
         savedAt: doc.data().savedAt?.toDate() || new Date(),
       })) as SavedSummary[];
 
-      setSavedSummaries(summaries.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime()));
+      const sortedSummaries = summaries.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
+      setSavedSummaries(sortedSummaries);
+      onDataLoaded?.(sortedSummaries);
     } catch (error) {
       console.error('Error loading saved summaries:', error);
       setError('Failed to load saved summaries');
@@ -65,7 +74,9 @@ export default function SavedInsights() {
     try {
       const summaryRef = doc(db, `users/${auth.currentUser.uid}/savedSummaries/${videoId}`);
       await deleteDoc(summaryRef);
-      setSavedSummaries(prev => prev.filter(summary => summary.videoId !== videoId));
+      const updatedSummaries = savedSummaries.filter(summary => summary.videoId !== videoId);
+      setSavedSummaries(updatedSummaries);
+      onDataLoaded?.(updatedSummaries);
     } catch (error) {
       console.error('Error removing summary:', error);
     }

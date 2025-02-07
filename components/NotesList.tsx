@@ -23,14 +23,21 @@ interface Note {
   createdAt: Date;
 }
 
-export default function NotesList() {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
+interface NotesListProps {
+  cachedNotes?: Note[];
+  onDataLoaded?: (notes: Note[]) => void;
+}
+
+export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps) {
+  const [notes, setNotes] = useState<Note[]>(cachedNotes || []);
+  const [loading, setLoading] = useState(!cachedNotes);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    loadNotes();
+    if (!cachedNotes) {
+      loadNotes();
+    }
   }, []);
 
   const formatTimestamp = (timestamp: number | Timestamp | Date): Date => {
@@ -102,7 +109,9 @@ export default function NotesList() {
         };
       });
 
-      setNotes(notesData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+      const sortedNotes = notesData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setNotes(sortedNotes);
+      onDataLoaded?.(sortedNotes);
     } catch (error) {
       console.error('Error loading notes:', error);
       setError('Failed to load notes');
@@ -117,7 +126,9 @@ export default function NotesList() {
     try {
       const noteRef = doc(db, `users/${auth.currentUser.uid}/notes/${noteId}`);
       await deleteDoc(noteRef);
-      setNotes(prev => prev.filter(note => note.id !== noteId));
+      const updatedNotes = notes.filter(note => note.id !== noteId);
+      setNotes(updatedNotes);
+      onDataLoaded?.(updatedNotes);
     } catch (error) {
       console.error('Error deleting note:', error);
     }

@@ -19,14 +19,21 @@ interface QuizWithMeta extends Quiz {
   lastAttempt?: QuizAttempt;
 }
 
-export default function QuizList() {
-  const [quizzes, setQuizzes] = useState<QuizWithMeta[]>([]);
-  const [loading, setLoading] = useState(true);
+interface QuizListProps {
+  cachedQuizzes?: QuizWithMeta[];
+  onDataLoaded?: (quizzes: QuizWithMeta[]) => void;
+}
+
+export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps) {
+  const [quizzes, setQuizzes] = useState<QuizWithMeta[]>(cachedQuizzes || []);
+  const [loading, setLoading] = useState(!cachedQuizzes);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    loadQuizzes();
+    if (!cachedQuizzes) {
+      loadQuizzes();
+    }
   }, []);
 
   const loadQuizzes = async () => {
@@ -68,13 +75,16 @@ export default function QuizList() {
         };
       });
 
-      setQuizzes(quizzesData.sort((a, b) => {
+      const sortedQuizzes = quizzesData.sort((a, b) => {
         // Sort by completion and then by subject name
         const aComplete = !!a.lastAttempt;
         const bComplete = !!b.lastAttempt;
         if (aComplete !== bComplete) return aComplete ? 1 : -1;
         return a.subjectName.localeCompare(b.subjectName);
-      }));
+      });
+
+      setQuizzes(sortedQuizzes);
+      onDataLoaded?.(sortedQuizzes);
     } catch (error) {
       console.error('Error loading quizzes:', error);
       setError('Failed to load quizzes');
