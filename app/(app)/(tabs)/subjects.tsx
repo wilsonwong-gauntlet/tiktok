@@ -20,6 +20,7 @@ import { Svg, Circle, Line, G, Text as SvgText } from 'react-native-svg';
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 10;
 const CARD_WIDTH = (WINDOW_WIDTH - (CARD_MARGIN * 4)) / 2;
+const GRAPH_SIZE = 140;
 
 interface KnowledgeGraphPreviewProps {
   data: GraphData;
@@ -204,23 +205,26 @@ export default function SubjectsScreen() {
   );
 
   const renderSubjectCard = (subject: Subject) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       key={subject.id}
-      style={styles.card}
+      style={styles.subjectCard}
       onPress={() => router.push(`/subject/${subject.id}`)}
     >
-      <Text style={styles.cardTitle}>{subject.name}</Text>
-      {renderProgressBar(subject.progress)}
-      <Text style={styles.progressText}>{subject.progress}% Complete</Text>
-      <Text style={styles.statsText}>
-        {subject.completedVideos} / {subject.videosCount} videos watched
-      </Text>
-      <View style={styles.graphContainer}>
-        <KnowledgeGraphPreview 
-          data={subject.knowledgeGraph}
-          width={CARD_WIDTH}
-          height={140}
-        />
+      <View style={styles.subjectContent}>
+        <Text style={styles.subjectTitle}>{subject.name}</Text>
+        <Text style={styles.subjectDescription} numberOfLines={2}>
+          {subject.description}
+        </Text>
+        
+        <View style={styles.progressContainer}>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressText}>{Math.round(subject.progress)}% Complete</Text>
+            <Text style={styles.videoCount}>
+              {subject.completedVideos} / {subject.videosCount} videos watched
+            </Text>
+          </View>
+          {renderProgressBar(subject.progress)}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -321,18 +325,45 @@ const styles = StyleSheet.create({
     padding: CARD_MARGIN,
     justifyContent: 'space-between',
   },
-  card: {
-    width: CARD_WIDTH,
+  subjectCard: {
     backgroundColor: '#222',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: CARD_MARGIN * 2,
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
   },
-  cardTitle: {
-    fontSize: 18,
+  subjectContent: {
+    flex: 1,
+  },
+  subjectTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  subjectDescription: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  progressContainer: {
+    marginTop: 'auto',
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  videoCount: {
+    color: '#666',
+    fontSize: 12,
   },
   progressBarContainer: {
     height: 6,
@@ -344,25 +375,6 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     backgroundColor: '#1a472a',
-  },
-  progressText: {
-    fontSize: 14,
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statsText: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
-  },
-  graphContainer: {
-    height: 140,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 8,
   },
   loadingContainer: {
     flex: 1,
