@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Comment } from '../types/video';
@@ -23,6 +24,8 @@ import {
   getReplies,
 } from '../services/firebase/comments';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { db } from '../services/firebase/index';
 
 interface CommentSummaryResponse {
   success: boolean;
@@ -61,12 +64,19 @@ export default function CommentSection({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     if (visible) {
       loadComments();
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (visible && videoId && auth.currentUser) {
+      checkIfSaved();
+    }
+  }, [visible, videoId]);
 
   const loadComments = async () => {
     if (!videoId) return;
@@ -302,29 +312,30 @@ export default function CommentSection({
           style={styles.summaryHeader}
           onPress={() => setSummaryExpanded(!summaryExpanded)}
         >
-          <View style={styles.summaryHeaderLeft}>
-            <Ionicons
-              name="analytics"
-              size={24}
-              color="#fff"
-            />
-            <Text style={styles.summaryTitle}>Community Insights</Text>
-          </View>
-          <View style={styles.summaryHeaderRight}>
-            <Text style={styles.summaryMeta}>
-              {commentSummary.commentCount} comments analyzed
-            </Text>
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={generateSummary}
-            >
-              <Ionicons name="refresh" size={20} color="#666" />
-            </TouchableOpacity>
-            <Ionicons
-              name={summaryExpanded ? "chevron-up" : "chevron-down"}
-              size={24}
-              color="#666"
-            />
+          <View style={styles.summaryHeader}>
+            <View style={styles.summaryHeaderLeft}>
+              <Ionicons name="analytics" size={24} color="#fff" />
+              <Text style={styles.summaryTitle}>Community Insights</Text>
+              <Text style={styles.summaryMeta}>{commentSummary.commentCount} comments analyzed</Text>
+            </View>
+            <View style={styles.summaryHeaderRight}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleToggleSave}
+              >
+                <Ionicons 
+                  name={isSaved ? "bookmark" : "bookmark-outline"} 
+                  size={20} 
+                  color={isSaved ? "#4CAF50" : "#fff"} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={generateSummary}
+              >
+                <Ionicons name="refresh" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -371,6 +382,70 @@ export default function CommentSection({
         )}
       </View>
     );
+  };
+
+  const handleShareSummary = async () => {
+    if (!commentSummary) return;
+    
+    const summaryText = [
+      '📊 Community Insights Summary',
+      '',
+      '💭 Main Discussion:',
+      commentSummary.summary,
+      '',
+      '❓ Key Areas of Confusion:',
+      ...commentSummary.confusionPoints.map(point => `• ${point}`),
+      '',
+      '💡 Valuable Insights:',
+      ...commentSummary.valuableInsights.map(insight => `• ${insight}`),
+      '',
+      '❤️ Community Engagement:',
+      commentSummary.sentiment,
+      '',
+      `Based on ${commentSummary.commentCount} comments`,
+      `Last updated: ${formatTimestamp(commentSummary.lastUpdated)}`,
+    ].join('\n');
+
+    try {
+      await Share.share({
+        message: summaryText,
+      });
+    } catch (error) {
+      console.error('Error sharing summary:', error);
+    }
+  };
+
+  const checkIfSaved = async () => {
+    if (!auth.currentUser || !videoId) return;
+    try {
+      const savedRef = doc(db, `users/${auth.currentUser.uid}/savedSummaries/${videoId}`);
+      const savedDoc = await getDoc(savedRef);
+      setIsSaved(savedDoc.exists());
+    } catch (error) {
+      console.error('Error checking saved status:', error);
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (!auth.currentUser || !videoId || !commentSummary) return;
+
+    try {
+      const savedRef = doc(db, `users/${auth.currentUser.uid}/savedSummaries/${videoId}`);
+      
+      if (isSaved) {
+        await deleteDoc(savedRef);
+        setIsSaved(false);
+      } else {
+        await setDoc(savedRef, {
+          ...commentSummary,
+          videoId,
+          savedAt: new Date(),
+        });
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error('Error toggling save status:', error);
+    }
   };
 
   return (
@@ -645,8 +720,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    backgroundColor: '#222',
   },
   summaryHeaderLeft: {
     flexDirection: 'row',
@@ -656,7 +730,7 @@ const styles = StyleSheet.create({
   summaryHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   summaryTitle: {
     color: '#fff',
@@ -666,6 +740,7 @@ const styles = StyleSheet.create({
   summaryMeta: {
     color: '#666',
     fontSize: 12,
+    marginLeft: 8,
   },
   refreshButton: {
     padding: 4,
@@ -757,5 +832,11 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#ff4444',
     fontSize: 14,
+  },
+  shareButton: {
+    padding: 4,
+  },
+  bookmarkButton: {
+    padding: 4,
   },
 }); 

@@ -214,4 +214,13 @@ export interface UserProgress {
     target: number;
     achieved: number;
   };
+}
+
+export interface CommentSummary {
+  summary: string;
+  confusionPoints: string[];
+  valuableInsights: string[];
+  sentiment: string;
+  lastUpdated: Date;
+  commentCount: number;
 } 

@@ -8,8 +8,9 @@ import { auth } from '../../../services/firebase';
 import { VideoService } from '../../../services/firebase/video';
 import { SubjectService } from '../../../services/firebase/subjects';
 import ReadingList from '../../../components/ReadingList';
+import SavedInsights from '../../../components/SavedInsights';
 
-type Tab = 'overview' | 'reading' | 'quizzes' | 'notes';
+type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
 
 export default function LearningScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -244,24 +245,20 @@ export default function LearningScreen() {
         return renderOverviewTab();
       case 'reading':
         return renderReadingTab();
+      case 'insights':
+        return <SavedInsights />;
       case 'quizzes':
         return (
           <View style={styles.comingSoon}>
             <Ionicons name="school-outline" size={48} color="#666" />
-            <Text style={styles.comingSoonTitle}>Quiz History Coming Soon</Text>
-            <Text style={styles.comingSoonText}>
-              Track your quiz performance and progress across all subjects
-            </Text>
+            <Text style={styles.comingSoonText}>Quizzes coming soon!</Text>
           </View>
         );
       case 'notes':
         return (
           <View style={styles.comingSoon}>
-            <Ionicons name="journal-outline" size={48} color="#666" />
-            <Text style={styles.comingSoonTitle}>Notes Coming Soon</Text>
-            <Text style={styles.comingSoonText}>
-              Access all your notes and reflections in one place
-            </Text>
+            <Ionicons name="document-text-outline" size={48} color="#666" />
+            <Text style={styles.comingSoonText}>Notes coming soon!</Text>
           </View>
         );
       default:
@@ -277,10 +274,11 @@ export default function LearningScreen() {
       </View>
 
       <View style={styles.tabs}>
-        {renderTab('overview', 'Overview', 'analytics-outline')}
+        {renderTab('overview', 'Overview', 'home-outline')}
+        {renderTab('insights', 'Insights', 'analytics-outline')}
         {renderTab('reading', 'Reading', 'book-outline')}
         {renderTab('quizzes', 'Quizzes', 'school-outline')}
-        {renderTab('notes', 'Notes', 'journal-outline')}
+        {renderTab('notes', 'Notes', 'document-text-outline')}
       </View>
 
       {renderContent()}
@@ -491,21 +489,13 @@ const styles = StyleSheet.create({
   },
   comingSoon: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  comingSoonTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    justifyContent: 'center',
+    padding: 32,
   },
   comingSoonText: {
     color: '#666',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+    fontSize: 16,
+    marginTop: 16,
   },
 }); 
