@@ -308,36 +308,31 @@ export default function CommentSection({
 
     return (
       <View style={styles.summaryContainer}>
-        <TouchableOpacity
-          style={styles.summaryHeader}
-          onPress={() => setSummaryExpanded(!summaryExpanded)}
-        >
-          <View style={styles.summaryHeader}>
-            <View style={styles.summaryHeaderLeft}>
-              <Ionicons name="analytics" size={24} color="#fff" />
-              <Text style={styles.summaryTitle}>Community Insights</Text>
-              <Text style={styles.summaryMeta}>{commentSummary.commentCount} comments analyzed</Text>
-            </View>
-            <View style={styles.summaryHeaderRight}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={handleToggleSave}
-              >
-                <Ionicons 
-                  name={isSaved ? "bookmark" : "bookmark-outline"} 
-                  size={20} 
-                  color={isSaved ? "#4CAF50" : "#fff"} 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={generateSummary}
-              >
-                <Ionicons name="refresh" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.summaryHeader}>
+          <View style={styles.summaryHeaderLeft}>
+            <Ionicons name="analytics" size={24} color="#fff" />
+            <Text style={styles.summaryTitle}>Community Insights</Text>
+            <Text style={styles.summaryMeta}>{commentSummary.commentCount} comments analyzed</Text>
           </View>
-        </TouchableOpacity>
+          <View style={styles.summaryHeaderRight}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleToggleSave}
+            >
+              <Ionicons 
+                name={isSaved ? "bookmark" : "bookmark-outline"} 
+                size={20} 
+                color={isSaved ? "#4CAF50" : "#fff"} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={generateSummary}
+            >
+              <Ionicons name="refresh" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {summaryExpanded && (
           <ScrollView style={styles.summaryScrollView} contentContainerStyle={styles.summaryContent}>

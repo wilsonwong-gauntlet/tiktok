@@ -111,40 +111,22 @@ export default function LearningScreen() {
       style={[styles.tab, activeTab === tab && styles.activeTab]}
       onPress={() => setActiveTab(tab)}
     >
-      <Ionicons 
-        name={icon as any} 
-        size={24} 
-        color={activeTab === tab ? '#fff' : '#666'} 
-      />
-      <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-        {label}
-      </Text>
+      <View style={styles.tabContent}>
+        <Ionicons 
+          name={icon as any} 
+          size={20} 
+          color={activeTab === tab ? '#fff' : '#666'} 
+        />
+        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+          {label}
+        </Text>
+      </View>
+      {activeTab === tab && <View style={styles.activeIndicator} />}
     </TouchableOpacity>
   );
 
   const renderOverviewTab = () => (
     <ScrollView style={styles.scrollView}>
-      <View style={styles.overview}>
-        <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>Weekly Goal</Text>
-          <View style={styles.goalProgress}>
-            <Text style={styles.statsValue}>
-              {formatTime(userProgress?.weeklyGoals.achieved || 0)}/
-              {formatTime(userProgress?.weeklyGoals.target || 10)}
-            </Text>
-            {renderProgressBar((userProgress?.weeklyGoals.achieved || 0) / 
-              (userProgress?.weeklyGoals.target || 10) * 100)}
-          </View>
-        </View>
-        
-        <View style={styles.streakCard}>
-          <Text style={styles.streakTitle}>Learning Streak</Text>
-          <Text style={styles.streakValue}>
-            🔥 {userProgress?.learningStreak || 0} days
-          </Text>
-        </View>
-      </View>
-
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Active Subjects</Text>
         {activeSubjects.length > 0 ? (
@@ -270,10 +252,9 @@ export default function LearningScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Learning</Text>
-        <Text style={styles.subtitle}>Track your progress</Text>
       </View>
 
-      <View style={styles.tabs}>
+      <View style={styles.tabBar}>
         {renderTab('overview', 'Overview', 'home-outline')}
         {renderTab('insights', 'Insights', 'analytics-outline')}
         {renderTab('reading', 'Reading', 'book-outline')}
@@ -292,41 +273,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 5,
-  },
-  tabs: {
+  tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#222',
-    padding: 4,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
   },
   tab: {
     flex: 1,
-    flexDirection: 'row',
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  tabContent: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 8,
-    borderRadius: 6,
+    gap: 4,
   },
   activeTab: {
-    backgroundColor: '#333',
+    backgroundColor: 'transparent',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#1a472a',
   },
   tabText: {
     color: '#666',
-    fontSize: 14,
+    fontSize: 12,
+    textAlign: 'center',
   },
   activeTabText: {
     color: '#fff',
@@ -334,67 +319,14 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  overview: {
-    flexDirection: 'row',
-    padding: 10,
-    justifyContent: 'space-between',
-  },
-  statsCard: {
-    flex: 1,
-    backgroundColor: '#222',
-    padding: 15,
-    borderRadius: 10,
-    marginRight: 5,
-  },
-  streakCard: {
-    flex: 1,
-    backgroundColor: '#222',
-    padding: 15,
-    borderRadius: 10,
-    marginLeft: 5,
-  },
-  statsTitle: {
-    color: '#666',
-    fontSize: 14,
-  },
-  statsValue: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
-  streakTitle: {
-    color: '#666',
-    fontSize: 14,
-  },
-  streakValue: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
   section: {
-    padding: 20,
+    padding: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#fff',
-    marginBottom: 10,
-  },
-  progressBarContainer: {
-    height: 4,
-    backgroundColor: '#333',
-    borderRadius: 2,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#1a472a',
-  },
-  goalProgress: {
-    marginTop: 8,
+    marginBottom: 12,
   },
   subjectsList: {
     gap: 12,
@@ -497,5 +429,16 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     marginTop: 16,
+  },
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#1a472a',
   },
 }); 
