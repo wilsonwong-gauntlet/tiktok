@@ -27,7 +27,7 @@ import Markdown from 'react-native-markdown-display';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
-type TabType = 'overview' | 'summaries' | 'quizzes' | 'reflections';
+type TabType = 'overview' | 'summaries' | 'quizzes' | 'reflections' | 'reading';
 
 type FilterOptions = {
   searchQuery: string;
@@ -153,6 +153,7 @@ export default function SubjectDetailScreen() {
   const [expandedReflectionRows, setExpandedReflectionRows] = useState<Set<string>>(new Set());
   const [expandedQuizzes, setExpandedQuizzes] = useState<Set<string>>(new Set());
   const [quizAttempts, setQuizAttempts] = useState<Record<string, QuizAttempt | null>>({});
+  const [expandedReadingRows, setExpandedReadingRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -422,18 +423,37 @@ export default function SubjectDetailScreen() {
   );
 
   const renderTabs = () => (
-    <View style={styles.tabContainer}>
-      {(['overview', 'summaries', 'quizzes', 'reflections'] as TabType[]).map((tab) => (
-        <TouchableOpacity
-          key={tab}
-          style={[styles.tab, activeTab === tab && styles.activeTab]}
-          onPress={() => setActiveTab(tab)}
-        >
-          <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
+    <View style={styles.tabs}>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'overview' && styles.activeTab]}
+        onPress={() => setActiveTab('overview')}
+      >
+        <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Overview</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'summaries' && styles.activeTab]}
+        onPress={() => setActiveTab('summaries')}
+      >
+        <Text style={[styles.tabText, activeTab === 'summaries' && styles.activeTabText]}>Summaries</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'quizzes' && styles.activeTab]}
+        onPress={() => setActiveTab('quizzes')}
+      >
+        <Text style={[styles.tabText, activeTab === 'quizzes' && styles.activeTabText]}>Quizzes</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'reading' && styles.activeTab]}
+        onPress={() => setActiveTab('reading')}
+      >
+        <Text style={[styles.tabText, activeTab === 'reading' && styles.activeTabText]}>Reading</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'reflections' && styles.activeTab]}
+        onPress={() => setActiveTab('reflections')}
+      >
+        <Text style={[styles.tabText, activeTab === 'reflections' && styles.activeTabText]}>Reflections</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -941,6 +961,75 @@ export default function SubjectDetailScreen() {
     );
   };
 
+  const renderReadingTab = () => {
+    const toggleReadingRow = (videoId: string) => {
+      const newExpandedRows = new Set(expandedReadingRows);
+      if (expandedReadingRows.has(videoId)) {
+        newExpandedRows.delete(videoId);
+      } else {
+        newExpandedRows.add(videoId);
+      }
+      setExpandedReadingRows(newExpandedRows);
+    };
+
+    return (
+      <ScrollView style={styles.tabContent}>
+        {videos.map((video) => (
+          <View key={video.id} style={styles.row}>
+            <TouchableOpacity
+              style={styles.rowHeader}
+              onPress={() => toggleReadingRow(video.id)}
+            >
+              <View style={styles.rowTitleContainer}>
+                <Text style={styles.rowTitle}>{video.title}</Text>
+                <Text style={styles.rowSubtitle}>
+                  {video.furtherReading?.length || 0} recommended resources
+                </Text>
+              </View>
+              <Ionicons
+                name={expandedReadingRows.has(video.id) ? "chevron-up" : "chevron-down"}
+                size={24}
+                color="#fff"
+              />
+            </TouchableOpacity>
+
+            {expandedReadingRows.has(video.id) && video.furtherReading && (
+              <View style={styles.readingList}>
+                {video.furtherReading.map((reading, index) => (
+                  <View key={index} style={styles.readingCard}>
+                    <Text style={styles.readingTitle}>{reading.title}</Text>
+                    <Text style={styles.readingAuthor}>By {reading.author}</Text>
+                    <Text style={styles.readingDescription}>{reading.description}</Text>
+                  </View>
+                ))}
+                {!video.furtherReading?.length && (
+                  <Text style={styles.emptyText}>No further reading available</Text>
+                )}
+              </View>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return renderOverviewTab();
+      case 'summaries':
+        return renderSummariesTab();
+      case 'quizzes':
+        return renderQuizzesTab();
+      case 'reading':
+        return renderReadingTab();
+      case 'reflections':
+        return renderReflectionsTab();
+      default:
+        return null;
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -979,10 +1068,7 @@ export default function SubjectDetailScreen() {
       {renderTabs()}
 
       <View style={styles.content}>
-        {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'summaries' && renderSummariesTab()}
-        {activeTab === 'quizzes' && renderQuizzesTab()}
-        {activeTab === 'reflections' && renderReflectionsTab()}
+        {renderContent()}
       </View>
     </ScrollView>
   );
@@ -1489,5 +1575,52 @@ const styles = StyleSheet.create({
   },
   lowScore: {
     color: '#f44336',
+  },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#222',
+    padding: 4,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 8,
+  },
+  row: {
+    backgroundColor: '#222',
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  rowTitleContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  rowSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  readingList: {
+    padding: 16,
+  },
+  readingCard: {
+    backgroundColor: '#222',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  readingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  readingAuthor: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  readingDescription: {
+    fontSize: 14,
+    color: '#999',
+    lineHeight: 20,
   },
 }); 
