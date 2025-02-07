@@ -35,10 +35,16 @@ const question = (query: string): Promise<string> => {
 
 async function getCommonMetadata() {
   console.log('\nEnter common metadata (will apply to all videos):');
-  const commonTagsInput = await question('\nCommon tags for all videos (comma-separated): ');
+  
+  // Get author information
+  const authorId = await question('Author ID: ');
+  const authorName = await question('Author Name: ');
+  
+  // Get common tags
+  const commonTagsInput = await question('Common tags for all videos (comma-separated): ');
   const commonTags = commonTagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
   
-  return { commonTags };
+  return { commonTags, authorId, authorName };
 }
 
 async function generateThumbnail(videoPath: string): Promise<string> {
@@ -96,39 +102,20 @@ interface Subject {
   name: string;
 }
 
-interface Concept {
-  id: string;
-  name: string;
-}
-
-interface LocalVideoUpload extends VideoUpload {
-  searchableText: string[];
-}
-
 interface VideoUpload {
   filePath: string;
   thumbnailPath: string;
   title: string;
   description: string;
   subjectId: string;      // Primary subject
-  conceptIds: string[];   // Primary concepts
-  relatedSubjects?: string[];
   tags: string[];
   authorId: string;
   authorName: string;
-  searchableText?: string[]; // Make searchableText optional
+  searchableText?: string[];
 }
 
 async function listSubjects(): Promise<Subject[]> {
   const snapshot = await db.collection('subjects').get();
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    name: doc.data().name
-  }));
-}
-
-async function listConcepts(subjectId: string): Promise<Concept[]> {
-  const snapshot = await db.collection('subjects').doc(subjectId).collection('concepts').get();
   return snapshot.docs.map(doc => ({
     id: doc.id,
     name: doc.data().name
@@ -179,8 +166,6 @@ async function uploadVideo(videoData: VideoUpload) {
       duration: 0, // TODO: Get video duration
       createdAt: new Date(),
       subjectId: videoData.subjectId,
-      conceptIds: videoData.conceptIds,
-      relatedSubjects: videoData.relatedSubjects || [],
       tags: videoData.tags,
       searchableText,
       viewCount: 0,
@@ -193,42 +178,13 @@ async function uploadVideo(videoData: VideoUpload) {
     const docRef = await db.collection('videos').add(videoDoc);
     const videoId = docRef.id;
 
-    // Get the subject document and its concepts
+    // Update subject with video count
     const subjectRef = db.collection('subjects').doc(videoData.subjectId);
-    const subjectDoc = await subjectRef.get();
-    const subjectData = subjectDoc.data();
-
-    // Get all concepts for this subject
-    const conceptsSnapshot = await subjectRef.collection('concepts').get();
-    const concepts = conceptsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    // Update subject with concepts and video counts
     await subjectRef.update({
-      videosCount: admin.firestore.FieldValue.increment(1),
-      primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId),
-      concepts: concepts // Ensure concepts array is present in subject document
+      videosCount: admin.firestore.FieldValue.increment(1)
     });
 
-    // Update concepts' video lists
-    const batch = db.batch();
-    for (const conceptId of videoData.conceptIds) {
-      const conceptRef = subjectRef.collection('concepts').doc(conceptId);
-      const conceptDoc = await conceptRef.get();
-      
-      if (conceptDoc.exists) {
-        batch.update(conceptRef, {
-          primaryVideos: admin.firestore.FieldValue.arrayUnion(videoId)
-        });
-      } else {
-        console.warn(`Concept ${conceptId} not found in subject ${videoData.subjectId}`);
-      }
-    }
-    await batch.commit();
-
-    console.log(`Successfully uploaded video ${videoId} and updated relationships`);
+    console.log(`Successfully uploaded video ${videoId}`);
     
     // Start transcription process
     console.log('Starting transcription process...');
@@ -241,7 +197,7 @@ async function uploadVideo(videoData: VideoUpload) {
   }
 }
 
-async function processVideoUpload(filePath: string, commonMetadata?: { commonTags: string[] }) {
+async function processVideoUpload(filePath: string, commonMetadata?: { commonTags: string[], authorId: string, authorName: string }) {
   // Generate thumbnail
   console.log(`Generating thumbnail for ${filePath}...`);
   const thumbnailPath = await generateThumbnail(filePath);
@@ -250,94 +206,88 @@ async function processVideoUpload(filePath: string, commonMetadata?: { commonTag
   console.log('Converting video to MP4...');
   const mp4Path = await convertToMp4(filePath);
 
-  // Get video metadata from user input
-  const title = await question('Enter video title: ');
-  const description = await question('Enter video description: ');
+  // Get video metadata from user
+  console.log('\nEnter video metadata:');
+  const title = await question('Title: ');
+  const description = await question('Description: ');
   
-  // Get subject and concepts
-  console.log('\nAvailable subjects:');
+  // List available subjects
   const subjects = await listSubjects();
-  subjects.forEach((s, i) => console.log(`${i + 1}. ${s.name}`));
+  console.log('\nAvailable subjects:');
+  subjects.forEach((subject, index) => {
+    console.log(`${index + 1}. ${subject.name}`);
+  });
   
-  const subjectIndex = parseInt(await question('Select subject (enter number): ')) - 1;
+  const subjectIndex = parseInt(await question('\nSelect subject number: ')) - 1;
   if (subjectIndex < 0 || subjectIndex >= subjects.length) {
     throw new Error('Invalid subject selection');
   }
+  
   const selectedSubject = subjects[subjectIndex];
-  
-  console.log('\nAvailable concepts for selected subject:');
-  const concepts = await listConcepts(selectedSubject.id);
-  concepts.forEach((c, i) => console.log(`${i + 1}. ${c.name}`));
-  
-  const conceptInput = await question('Select concepts (comma-separated numbers): ');
-  const conceptIndices = conceptInput.split(',')
-    .map(i => parseInt(i.trim()) - 1)
-    .filter(i => i >= 0 && i < concepts.length);
-  
-  if (conceptIndices.length === 0) {
-    throw new Error('No valid concepts selected');
-  }
-  
-  const conceptIds = conceptIndices.map(i => concepts[i].id);
 
-  // Get tags
-  const specificTags = (await question('\nEnter specific tags for this video (comma-separated): '))
-    .split(',')
-    .map(tag => tag.trim())
-    .filter(Boolean);
+  // Get additional tags
+  const additionalTagsInput = await question('\nAdditional tags (comma-separated): ');
+  const additionalTags = additionalTagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
+  
+  // Combine common tags with additional tags
+  const tags = [...(commonMetadata?.commonTags || []), ...additionalTags];
 
-  const tags = [...new Set([
-    ...(commonMetadata?.commonTags || []),
-    ...specificTags
-  ])];
-
-  // Create video upload data
+  // Create video upload object
   const videoData: VideoUpload = {
     filePath: mp4Path,
     thumbnailPath,
     title,
     description,
     subjectId: selectedSubject.id,
-    conceptIds,
     tags,
-    authorId: 'sample-author',
-    authorName: 'AI Learning Channel'
+    authorId: commonMetadata?.authorId || 'default-author',
+    authorName: commonMetadata?.authorName || 'Default Author'
   };
 
-  return await uploadVideo(videoData);
+  try {
+    const videoId = await uploadVideo(videoData);
+    console.log(`Video uploaded successfully with ID: ${videoId}`);
+    
+    // Clean up temporary files
+    unlinkSync(mp4Path);
+    unlinkSync(thumbnailPath);
+  } catch (error) {
+    console.error('Error processing video upload:', error);
+    throw error;
+  }
 }
 
 async function main() {
   try {
-    const filePaths = process.argv.slice(2);
-    if (filePaths.length === 0) {
-      console.error('Please provide at least one video file path');
+    // Get common metadata
+    const commonMetadata = await getCommonMetadata();
+    
+    // Get video files from command line arguments
+    const videoFiles = process.argv.slice(2);
+    if (videoFiles.length === 0) {
+      console.error('Please provide video file paths as arguments');
       process.exit(1);
     }
 
-    console.log(`Found ${filePaths.length} videos to upload`);
-    
-    const useCommonMetadata = (await question('\nDo you want to enter common metadata for all videos? (y/n): ')).toLowerCase() === 'y';
-    const commonMetadata = useCommonMetadata ? await getCommonMetadata() : undefined;
+    // Process each video
+    for (const filePath of videoFiles) {
+      if (!existsSync(filePath)) {
+        console.error(`File not found: ${filePath}`);
+        continue;
+      }
 
-    const results = [];
-    for (const filePath of filePaths) {
-      const result = await processVideoUpload(filePath, commonMetadata);
-      results.push({ filePath, success: !!result, videoId: result });
+      console.log(`\nProcessing ${filePath}...`);
+      await processVideoUpload(filePath, commonMetadata);
     }
 
-    console.log('\nUpload Summary:');
-    console.log('----------------');
-    results.forEach(({ filePath, success, videoId }) => {
-      console.log(`${basename(filePath)}: ${success ? `Success (ID: ${videoId})` : 'Failed'}`);
-    });
-    
-    rl.close();
+    console.log('\nAll videos processed successfully');
+    process.exit(0);
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in main process:', error);
     process.exit(1);
+  } finally {
+    rl.close();
   }
 }
 
-// Run the script
 main(); 
