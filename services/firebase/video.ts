@@ -556,6 +556,7 @@ export class VideoService {
 
   static async getVideosBySubject(subjectId: string): Promise<Video[]> {
     try {
+      console.log('Fetching videos for subject:', subjectId);
       const videosRef = collection(db, VIDEOS_COLLECTION);
       const q = query(
         videosRef,
@@ -563,12 +564,30 @@ export class VideoService {
         orderBy('createdAt', 'desc')
       );
       
+      console.log('Executing query with constraints:', {
+        collection: VIDEOS_COLLECTION,
+        subjectId,
+        orderBy: 'createdAt desc'
+      });
+      
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      console.log('Query results:', {
+        totalResults: snapshot.size,
+        documents: snapshot.docs.map(doc => ({
+          id: doc.id,
+          title: doc.data().title,
+          subjectId: doc.data().subjectId,
+          createdAt: doc.data().createdAt?.toDate()
+        }))
+      });
+      
+      const videos = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate()
       })) as Video[];
+      
+      return videos;
     } catch (error) {
       console.error('Error fetching videos by subject:', error);
       throw error;

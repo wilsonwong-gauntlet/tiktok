@@ -65,7 +65,7 @@ interface VideoWithQuiz {
 export default function SubjectDetailScreen() {
   const { id } = useLocalSearchParams();
   const [subject, setSubject] = useState<Subject | null>(null);
-  const [videos, setVideos] = useState<VideoWithQuiz[]>([]);
+  const [videos, setVideos] = useState<Video[]>([]);
   const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +98,21 @@ export default function SubjectDetailScreen() {
   }, [activeTab, videos]);
 
   useEffect(() => {
-    filterContent();
+    const filtered = filterContent();
+    setFilteredVideos(filtered);
+    
+    // Also filter saved videos
+    const filteredSaved = savedVideos.filter(video => {
+      const matchesSearch = filterOptions.searchQuery === '' ||
+        video.title.toLowerCase().includes(filterOptions.searchQuery.toLowerCase()) ||
+        video.description.toLowerCase().includes(filterOptions.searchQuery.toLowerCase());
+
+      const matchesConcepts = filterOptions.conceptFilter.length === 0 ||
+        video.conceptIds.some(id => filterOptions.conceptFilter.includes(id));
+
+      return matchesSearch && matchesConcepts;
+    });
+    setFilteredSavedVideos(filteredSaved);
   }, [filterOptions, videos, savedVideos]);
 
   useEffect(() => {
@@ -135,7 +149,10 @@ export default function SubjectDetailScreen() {
   };
 
   const loadSubjectAndVideos = async () => {
-    if (!auth.currentUser || !id) return;
+    if (!auth.currentUser || !id) {
+      console.log('Missing required data:', { auth: !!auth.currentUser, id });
+      return;
+    }
 
     try {
       setLoading(true);
@@ -149,6 +166,7 @@ export default function SubjectDetailScreen() {
       // Load subject data
       const subjectData = await SubjectService.getSubjectById(id as string, auth.currentUser.uid);
       if (!subjectData) {
+        console.error('Subject not found:', id);
         setError('Subject not found');
         return;
       }
@@ -156,8 +174,16 @@ export default function SubjectDetailScreen() {
       setSubject(subjectData);
 
       // Load all related videos
+      console.log('Fetching videos for subject:', id);
       const subjectVideos = await VideoService.getVideosBySubject(id as string);
-      console.log('Loaded subject videos:', subjectVideos);
+      console.log('Loaded subject videos:', {
+        count: subjectVideos.length,
+        videos: subjectVideos.map(v => ({
+          id: v.id,
+          title: v.title,
+          subjectId: v.subjectId
+        }))
+      });
       setVideos(subjectVideos);
 
       // Load saved videos for this subject
@@ -165,7 +191,13 @@ export default function SubjectDetailScreen() {
       console.log('Loaded saved video IDs:', savedVideoIds);
       
       const savedSubjectVideos = subjectVideos.filter(video => savedVideoIds.includes(video.id));
-      console.log('Filtered saved subject videos:', savedSubjectVideos);
+      console.log('Filtered saved subject videos:', {
+        count: savedSubjectVideos.length,
+        videos: savedSubjectVideos.map(v => ({
+          id: v.id,
+          title: v.title
+        }))
+      });
       setSavedVideos(savedSubjectVideos);
 
     } catch (error) {
