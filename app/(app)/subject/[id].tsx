@@ -572,11 +572,6 @@ export default function SubjectDetailScreen() {
         </View>
       )}
 
-      <View style={styles.conceptsSection}>
-        <Text style={styles.sectionTitle}>Core Concepts</Text>
-        {subject?.concepts.map(renderConcept)}
-      </View>
-
       <View style={styles.videosSection}>
         <Text style={styles.sectionTitle}>All Videos</Text>
         {filteredVideos.length > 0 ? (
