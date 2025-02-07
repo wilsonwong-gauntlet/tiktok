@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface Note {
   id: string;
   userId: string;
@@ -148,7 +150,7 @@ export interface Comment {
   userId: string;
   userName: string;
   content: string;
-  createdAt: Date;
+  createdAt: Timestamp;
   likes: number;
   replies?: Comment[];
 }

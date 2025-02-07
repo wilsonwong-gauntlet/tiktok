@@ -663,3 +663,421 @@ export const generateFurtherReading = onCall(
     }
   },
 );
+
+interface GenerateCommentSummaryRequest {
+  videoId: string;
+}
+
+interface CommentSummaryResponse {
+  success: boolean;
+  reason?: string;
+  summary?: {
+    summary: string;
+    confusionPoints: string[];
+    valuableInsights: string[];
+    sentiment: string;
+  };
+}
+
+interface CommentSummaryFormat {
+  summary: string;
+  confusionPoints: string[];
+  valuableInsights: string[];
+  sentiment: string;
+}
+
+/**
+ * Attempts to parse an OpenAI response into a valid comment summary format.
+ * Handles multiple possible response formats and validates the structure.
+ * @param {unknown} response - The response from OpenAI to parse
+ * @return {CommentSummaryFormat} A validated comment summary
+ */
+function parseCommentSummaryResponse(response: unknown): CommentSummaryFormat {
+  logger.info("Attempting to parse comment summary response");
+
+  // Case 1: Direct valid JSON object
+  if (isValidCommentSummary(response)) {
+    logger.info("Found valid summary in direct format");
+    return response;
+  }
+
+  // Case 2: String that needs to be parsed
+  if (typeof response === "string") {
+    try {
+      const parsed = JSON.parse(response);
+      if (isValidCommentSummary(parsed)) {
+        logger.info("Successfully parsed string response into valid format");
+        return parsed;
+      }
+    } catch (error) {
+      logger.warn("Failed to parse string response as JSON");
+    }
+  }
+
+  // Case 3: Attempt to extract from markdown or text format
+  if (typeof response === "string") {
+    try {
+      return extractSummaryFromText(response);
+    } catch (error) {
+      logger.warn("Failed to extract summary from text format");
+    }
+  }
+
+  logger.error("Could not parse response into valid summary format:", response);
+  throw new Error("Could not parse response into valid summary format");
+}
+
+/**
+ * Type guard to check if a value is a valid CommentSummaryFormat.
+ * @param {unknown} value - The value to check
+ * @return {boolean} True if the value is a valid CommentSummaryFormat
+ */
+function isValidCommentSummary(value: unknown): value is CommentSummaryFormat {
+  if (typeof value !== "object" || value === null) return false;
+
+  const summary = value as Partial<CommentSummaryFormat>;
+
+  return (
+    typeof summary.summary === "string" &&
+    Array.isArray(summary.confusionPoints) &&
+    summary.confusionPoints.every((point) => typeof point === "string") &&
+    Array.isArray(summary.valuableInsights) &&
+    summary.valuableInsights.every((insight) => typeof insight === "string") &&
+    typeof summary.sentiment === "string"
+  );
+}
+
+/**
+ * Attempts to extract summary components from a text format response.
+ * @param {string} text - The text to parse
+ * @return {CommentSummaryFormat} The extracted summary
+ */
+function extractSummaryFromText(text: string): CommentSummaryFormat {
+  const summaryMatch = text.match(/Summary:?\s*([^\n]+)/i);
+  const confusionMatch = text.match(/Confusion Points?:?\s*([\s\S]*?)(?=Valuable Insights?:|Sentiment:|$)/i);
+  const insightsMatch = text.match(/Valuable Insights?:?\s*([\s\S]*?)(?=Sentiment:|$)/i);
+  const sentimentMatch = text.match(/Sentiment:?\s*([^\n]+)/i);
+
+  if (!summaryMatch || !confusionMatch || !insightsMatch || !sentimentMatch) {
+    throw new Error("Could not extract all required sections from text");
+  }
+
+  const summary = summaryMatch[1].trim();
+  const confusionPoints = confusionMatch[1]
+    .split(/\n/)
+    .map((line) => line.replace(/^[•\-*]\s*/, "").trim())
+    .filter((line) => line.length > 0);
+  const valuableInsights = insightsMatch[1]
+    .split(/\n/)
+    .map((line) => line.replace(/^[•\-*]\s*/, "").trim())
+    .filter((line) => line.length > 0);
+  const sentiment = sentimentMatch[1].trim();
+
+  return {
+    summary,
+    confusionPoints,
+    valuableInsights,
+    sentiment,
+  };
+}
+
+export const generateCommentSummary = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateCommentSummaryRequest>): Promise<CommentSummaryResponse> => {
+    try {
+      logger.info("=== Starting generateCommentSummary function ===");
+      logger.info("Request data:", {
+        auth: request.auth ? {
+          uid: request.auth.uid,
+          token: request.auth.token,
+        } : null,
+        app: request.app,
+        rawRequest: request.rawRequest ? {
+          headers: request.rawRequest.headers,
+          method: request.rawRequest.method,
+        } : null,
+      });
+
+      const {videoId} = request.data;
+      if (!videoId) {
+        const error = "Missing required parameter: videoId";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      logger.info("Starting comment summary generation for video:", {
+        videoId,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        const error = "OpenAI API key is not configured";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      logger.info("API key verified successfully");
+
+      // Initialize OpenAI client with the secret at runtime
+      const openai = new OpenAI({apiKey});
+      logger.info("OpenAI client initialized successfully");
+
+      // Get all comments for this video
+      let commentsSnapshot;
+      try {
+        logger.info("Fetching comments from Firestore for video:", videoId);
+        commentsSnapshot = await admin.firestore()
+          .collection("comments")
+          .where("videoId", "==", videoId)
+          .orderBy("createdAt", "desc")
+          .limit(50)
+          .get();
+
+        logger.info("Successfully fetched comments from Firestore", {
+          commentCount: commentsSnapshot.size,
+          empty: commentsSnapshot.empty,
+        });
+      } catch (error) {
+        logger.error("Error fetching comments from Firestore:", {
+          error,
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          errorStack: error instanceof Error ? error.stack : undefined,
+          videoId,
+        });
+        return {
+          success: false,
+          reason: "Failed to fetch comments",
+        };
+      }
+
+      const comments = commentsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        content: doc.data().content,
+        likes: doc.data().likes || 0,
+        createdAt: doc.data().createdAt,
+      }));
+
+      logger.info("Processed comments data:", {
+        commentCount: comments.length,
+        hasLikes: comments.some((c) => c.likes > 0),
+        oldestComment: comments[comments.length - 1]?.createdAt,
+        newestComment: comments[0]?.createdAt,
+      });
+
+      if (comments.length < 5) {
+        logger.info("Insufficient comments for summarization:", {
+          commentCount: comments.length,
+          requiredCount: 5,
+        });
+        return {
+          success: false,
+          reason: "Not enough comments",
+        };
+      }
+
+      // Prepare the prompt for GPT
+      const prompt = [
+        "Analyze these comments from a learning video and create a structured summary.",
+        "You must respond with a valid JSON object containing exactly these fields:",
+        "{",
+        "  \"summary\": \"A concise 2-3 sentence summary of the main discussion points\",",
+        "  \"confusionPoints\": [\"List of areas where students expressed confusion or questions\"],",
+        "  \"valuableInsights\": [\"List of most valuable contributions or insights shared\"],",
+        "  \"sentiment\": \"Overall sentiment and engagement level description\"",
+        "}",
+        "",
+        "Comments to analyze (most recent first):",
+        comments.map((c) => `- ${c.content} (${c.likes} likes)`).join("\n"),
+      ].join("\n");
+
+      logger.info("Prepared OpenAI prompt", {
+        promptLength: prompt.length,
+        commentCount: comments.length,
+      });
+
+      let completion;
+      try {
+        logger.info("Calling OpenAI API with configuration:", {
+          model: "gpt-4-turbo-preview",
+          maxTokens: 1000,
+          temperature: 0.7,
+          responseFormat: "json_object",
+        });
+
+        // Call OpenAI API
+        completion = await openai.chat.completions.create({
+          model: "gpt-4-turbo-preview",
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are an expert at analyzing educational discussions.",
+                "You must ALWAYS respond with a valid JSON object that exactly matches",
+                "the structure specified in the prompt. Each field is required.",
+                "The response must be parseable JSON with no markdown or other formatting.",
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+          response_format: {type: "json_object"},
+        });
+
+        logger.info("Received response from OpenAI:", {
+          completionId: completion.id,
+          model: completion.model,
+          usage: completion.usage,
+        });
+
+        // Log the raw response for debugging
+        logger.info("Raw OpenAI response:", {
+          content: completion.choices[0].message.content,
+        });
+      } catch (error) {
+        const errorDetails = error instanceof OpenAI.APIError ? {
+          status: error.status,
+          message: error.message,
+          type: error.type,
+          code: error.code,
+        } : undefined;
+
+        logger.error("Error calling OpenAI API:", {
+          error,
+          errorType: error instanceof OpenAI.APIError ?
+            "OpenAI.APIError" : "Unknown",
+          errorDetails,
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+
+        if (error instanceof OpenAI.APIError) {
+          logger.error("OpenAI API Error details:", {
+            status: error.status,
+            message: error.message,
+            type: error.type,
+          });
+
+          const errorMessage = error.status === 401 ?
+            "Authentication error: Invalid OpenAI API key" :
+            error.status === 429 ?
+              "Rate limit exceeded: Too many requests to OpenAI" :
+              error.status === 500 ?
+                "OpenAI service error: Please try again later" :
+                "Failed to generate summary with AI";
+
+          return {
+            success: false,
+            reason: errorMessage,
+          };
+        }
+
+        return {
+          success: false,
+          reason: "Failed to generate summary with AI",
+        };
+      }
+
+      const response = completion.choices[0].message.content;
+      if (!response) {
+        logger.error("Empty response from OpenAI");
+        return {
+          success: false,
+          reason: "Failed to get response from OpenAI",
+        };
+      }
+
+      let summary;
+      try {
+        // Use the new parser that handles multiple formats
+        summary = parseCommentSummaryResponse(response);
+        logger.info("Successfully parsed OpenAI response:", {
+          summaryLength: summary.summary.length,
+          confusionPointsCount: summary.confusionPoints.length,
+          valuableInsightsCount: summary.valuableInsights.length,
+          sentimentLength: summary.sentiment.length,
+        });
+      } catch (error) {
+        logger.error("Error parsing OpenAI response:", {
+          error,
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          errorStack: error instanceof Error ? error.stack : undefined,
+          rawResponse: response,
+        });
+        return {
+          success: false,
+          reason: "Failed to parse AI response",
+        };
+      }
+
+      try {
+        logger.info("Updating Firestore with summary", {
+          videoId,
+          summaryLength: summary.summary.length,
+          confusionPointsCount: summary.confusionPoints.length,
+          valuableInsightsCount: summary.valuableInsights.length,
+        });
+
+        // Update the video document with the new summary
+        await admin.firestore()
+          .collection("videos")
+          .doc(videoId)
+          .update({
+            commentSummary: {
+              ...summary,
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              commentCount: comments.length,
+            },
+          });
+        logger.info("Successfully updated video document with summary");
+      } catch (error) {
+        logger.error("Error updating Firestore:", {
+          error,
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          errorStack: error instanceof Error ? error.stack : undefined,
+          videoId,
+        });
+        return {
+          success: false,
+          reason: "Failed to save summary",
+        };
+      }
+
+      logger.info("=== Successfully completed generateCommentSummary function ===", {
+        videoId,
+        commentCount: comments.length,
+        summaryGenerated: true,
+      });
+
+      return {
+        success: true,
+        summary,
+      };
+    } catch (error) {
+      logger.error("Unhandled error in generateCommentSummary:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+      return {
+        success: false,
+        reason: error instanceof Error ? error.message : "An unexpected error occurred",
+      };
+    }
+  },
+);

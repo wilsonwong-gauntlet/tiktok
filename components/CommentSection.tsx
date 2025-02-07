@@ -21,6 +21,22 @@ import {
   addReply,
   getReplies,
 } from '../services/firebase/comments';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+interface CommentSummaryResponse {
+  success: boolean;
+  reason?: string;
+  summary?: CommentSummary;
+}
+
+interface CommentSummary {
+  summary: string;
+  confusionPoints: string[];
+  valuableInsights: string[];
+  sentiment: string;
+  lastUpdated: Date;
+  commentCount: number;
+}
 
 interface CommentSectionProps {
   visible: boolean;
@@ -40,6 +56,10 @@ export default function CommentSection({
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
   const [replyContent, setReplyContent] = useState('');
+  const [commentSummary, setCommentSummary] = useState<CommentSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -59,6 +79,60 @@ export default function CommentSection({
       console.error('Error loading comments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateSummary = async () => {
+    if (!videoId || summaryLoading) return;
+
+    try {
+      setError(null);
+      setSummaryLoading(true);
+      console.log('Starting summary generation for video:', videoId);
+      
+      const functions = getFunctions();
+      console.log('Firebase Functions initialized');
+      
+      const generateCommentSummary = httpsCallable<{ videoId: string }, CommentSummaryResponse>(
+        functions,
+        'generateCommentSummary'
+      );
+      console.log('Cloud function reference created');
+      
+      console.log('Calling cloud function with videoId:', videoId);
+      const result = await generateCommentSummary({ videoId });
+      console.log('Cloud function response:', result);
+      
+      if (result.data.success && result.data.summary) {
+        console.log('Summary generated successfully:', result.data.summary);
+        setCommentSummary(result.data.summary);
+      } else {
+        console.log('Function returned error:', result.data.reason);
+        setError(result.data.reason || 'Could not generate summary');
+      }
+    } catch (error: any) {
+      console.error('Error generating summary:', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        stack: error?.stack,
+        error
+      });
+      
+      // Handle Firebase specific errors
+      if (error?.code === 'functions/internal') {
+        setError('Server error. Please try again in a few minutes.');
+      } else if (error?.code === 'functions/unavailable') {
+        setError('Service temporarily unavailable. Please try again later.');
+      } else if (error?.code === 'functions/unauthenticated') {
+        setError('Please sign in to use this feature.');
+      } else if (error?.message) {
+        setError(error.message);
+      } else {
+        setError('Failed to generate summary. Please try again later.');
+      }
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -128,12 +202,27 @@ export default function CommentSection({
     }
   };
 
+  const formatTimestamp = (timestamp: any) => {
+    if (!timestamp) return 'Unknown date';
+    try {
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().toLocaleDateString();
+      } else if (timestamp instanceof Date) {
+        return timestamp.toLocaleDateString();
+      }
+      return 'Unknown date';
+    } catch (error) {
+      console.error('Error formatting timestamp:', error);
+      return 'Unknown date';
+    }
+  };
+
   const renderComment = ({ item: comment }: { item: Comment }) => (
     <View style={styles.commentContainer}>
       <View style={styles.commentHeader}>
         <Text style={styles.userName}>{comment.userName}</Text>
         <Text style={styles.timestamp}>
-          {comment.createdAt.toLocaleDateString()}
+          {formatTimestamp(comment.createdAt)}
         </Text>
       </View>
       <Text style={styles.commentContent}>{comment.content}</Text>
@@ -162,6 +251,127 @@ export default function CommentSection({
     </View>
   );
 
+  const renderSummarySection = () => {
+    if (!commentSummary && !summaryLoading) {
+      if (comments.length >= 5) {
+        return (
+          <View>
+            <TouchableOpacity
+              style={styles.generateSummaryButton}
+              onPress={generateSummary}
+            >
+              <Ionicons name="analytics-outline" size={20} color="#fff" />
+              <Text style={styles.generateSummaryText}>Generate Community Insights</Text>
+            </TouchableOpacity>
+            {error && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={16} color="#ff4444" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+          </View>
+        );
+      } else if (comments.length > 0) {
+        return (
+          <View style={styles.thresholdMessageContainer}>
+            <Ionicons name="information-circle-outline" size={20} color="#666" />
+            <Text style={styles.thresholdMessageText}>
+              Need at least 5 comments to generate insights
+            </Text>
+          </View>
+        );
+      }
+      return null;
+    }
+
+    if (summaryLoading) {
+      return (
+        <View style={styles.summaryLoadingContainer}>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.summaryLoadingText}>Analyzing comments...</Text>
+        </View>
+      );
+    }
+
+    if (!commentSummary) return null;
+
+    return (
+      <View style={styles.summaryContainer}>
+        <TouchableOpacity
+          style={styles.summaryHeader}
+          onPress={() => setSummaryExpanded(!summaryExpanded)}
+        >
+          <View style={styles.summaryHeaderLeft}>
+            <Ionicons
+              name="analytics"
+              size={24}
+              color="#fff"
+            />
+            <Text style={styles.summaryTitle}>Community Insights</Text>
+          </View>
+          <View style={styles.summaryHeaderRight}>
+            <Text style={styles.summaryMeta}>
+              {commentSummary.commentCount} comments analyzed
+            </Text>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={generateSummary}
+            >
+              <Ionicons name="refresh" size={20} color="#666" />
+            </TouchableOpacity>
+            <Ionicons
+              name={summaryExpanded ? "chevron-up" : "chevron-down"}
+              size={24}
+              color="#666"
+            />
+          </View>
+        </TouchableOpacity>
+
+        {summaryExpanded && (
+          <View style={styles.summaryContent}>
+            <View style={styles.summarySection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="chatbubbles-outline" size={16} color="#fff" /> Main Discussion
+              </Text>
+              <Text style={styles.sectionText}>{commentSummary.summary}</Text>
+            </View>
+
+            {commentSummary.confusionPoints.length > 0 && (
+              <View style={styles.summarySection}>
+                <Text style={styles.sectionTitle}>
+                  <Ionicons name="help-circle-outline" size={16} color="#fff" /> Areas of Confusion
+                </Text>
+                {commentSummary.confusionPoints.map((point, index) => (
+                  <Text key={index} style={styles.bulletPoint}>• {point}</Text>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.summarySection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="bulb-outline" size={16} color="#fff" /> Valuable Insights
+              </Text>
+              {commentSummary.valuableInsights.map((insight, index) => (
+                <Text key={index} style={styles.bulletPoint}>• {insight}</Text>
+              ))}
+            </View>
+
+            <View style={styles.summarySection}>
+              <Text style={styles.sectionTitle}>
+                <Ionicons name="heart-outline" size={16} color="#fff" /> Community Engagement
+              </Text>
+              <Text style={styles.sectionText}>{commentSummary.sentiment}</Text>
+            </View>
+
+            <Text style={styles.lastUpdated}>
+              Last updated: {formatTimestamp(commentSummary.lastUpdated)}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -180,6 +390,8 @@ export default function CommentSection({
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
+
+          {renderSummarySection()}
 
           {loading ? (
             <ActivityIndicator style={styles.loading} color="#fff" />
@@ -420,5 +632,126 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  summaryContainer: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  summaryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  summaryMeta: {
+    color: '#666',
+    fontSize: 12,
+  },
+  refreshButton: {
+    padding: 4,
+  },
+  summaryContent: {
+    padding: 16,
+  },
+  summarySection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sectionText: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  bulletPoint: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+    marginLeft: 8,
+    marginBottom: 4,
+  },
+  lastUpdated: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'right',
+  },
+  generateSummaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a472a',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  generateSummaryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  summaryLoadingContainer: {
+    alignItems: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  summaryLoadingText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  thresholdMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#222',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  thresholdMessageText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 14,
   },
 }); 
