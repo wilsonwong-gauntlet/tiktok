@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { VideoSummary } from '../types/video';
 import { Ionicons } from '@expo/vector-icons';
+import Markdown from 'react-native-markdown-display';
 
 interface VideoSummarySectionProps {
   summary?: VideoSummary;
@@ -10,6 +11,80 @@ interface VideoSummarySectionProps {
   transcription?: string;
   transcriptionStatus?: 'pending' | 'completed' | 'error';
 }
+
+const markdownStyles = {
+  body: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  heading1: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+    marginVertical: 10,
+  },
+  heading2: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+    marginVertical: 8,
+  },
+  heading3: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginVertical: 6,
+  },
+  paragraph: {
+    color: '#fff',
+    fontSize: 16,
+    marginVertical: 4,
+  },
+  strong: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  em: {
+    color: '#fff',
+    fontStyle: 'italic',
+  },
+  link: {
+    color: '#1a472a',
+    textDecorationLine: 'underline',
+  },
+  list_item: {
+    color: '#fff',
+    fontSize: 16,
+    marginVertical: 2,
+  },
+  bullet_list: {
+    color: '#fff',
+  },
+  ordered_list: {
+    color: '#fff',
+  },
+  code_inline: {
+    color: '#fff',
+    backgroundColor: '#333',
+    padding: 4,
+    borderRadius: 4,
+    fontFamily: 'monospace',
+  },
+  code_block: {
+    color: '#fff',
+    backgroundColor: '#333',
+    padding: 8,
+    borderRadius: 4,
+    fontFamily: 'monospace',
+  },
+  blockquote: {
+    color: '#ccc',
+    borderLeftWidth: 4,
+    borderLeftColor: '#666',
+    paddingLeft: 8,
+    marginLeft: 8,
+  },
+} as const;
 
 export default function VideoSummarySection({ 
   summary, 
@@ -69,8 +144,9 @@ export default function VideoSummarySection({
         <Text style={styles.sectionTitle}>Key Points</Text>
         {summary.key_points.map((point: string, index: number) => (
           <View key={index} style={styles.bulletPoint}>
-            <Text style={styles.bulletDot}>•</Text>
-            <Text style={styles.bulletText}>{point}</Text>
+            <Markdown style={markdownStyles}>
+              {point}
+            </Markdown>
           </View>
         ))}
       </View>
@@ -80,7 +156,9 @@ export default function VideoSummarySection({
         <View style={styles.conceptsContainer}>
           {summary.main_concepts.map((concept: string, index: number) => (
             <View key={index} style={styles.conceptTag}>
-              <Text style={styles.conceptText}>{concept}</Text>
+              <Markdown style={markdownStyles}>
+                {concept}
+              </Markdown>
             </View>
           ))}
         </View>
