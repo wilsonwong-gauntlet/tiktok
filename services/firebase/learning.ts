@@ -12,8 +12,30 @@ import {
   Timestamp,
   updateDoc
 } from 'firebase/firestore';
-import { db } from './index';
+import { db, auth } from './index';
 import { Note, Quiz, QuizAttempt, LearningConcept, RetentionPrompt } from '../../types/video';
+
+interface UserProgress {
+  userId: string;
+  subjects: {
+    [subjectId: string]: {
+      progress: number;
+      lastActivity: Date;
+      completedVideos: string[];
+      masteredConcepts: string[];
+      quizScores: {
+        [quizId: string]: number;
+      };
+      reflections: string[];
+    };
+  };
+  learningStreak: number;
+  totalStudyTime: number;
+  weeklyGoals: {
+    target: number;
+    achieved: number;
+  };
+}
 
 // Notes
 export async function saveNote(
@@ -89,20 +111,77 @@ export async function saveQuizAttempt(
   userId: string, 
   quizId: string, 
   answers: number[], 
-  score: number
+  score: number,
+  videoId: string,
+  subjectId: string
 ) {
   try {
-    const attemptsRef = collection(db, 'users', userId, 'quizAttempts');
-    const attemptData = {
+    const attempt: QuizAttempt = {
+      id: `${quizId}_${Date.now()}`,
       userId,
       quizId,
       answers,
       score,
-      completedAt: serverTimestamp(),
+      completedAt: new Date()
     };
+
+    // Save the quiz attempt
+    await setDoc(
+      doc(db, 'users', userId, 'quizAttempts', quizId),
+      attempt
+    );
+
+    // Get or create user progress document
+    const userProgressRef = doc(db, 'userProgress', userId);
+    const userProgressDoc = await getDoc(userProgressRef);
     
-    const newAttempt = await addDoc(attemptsRef, attemptData);
-    return newAttempt.id;
+    let userProgress: UserProgress;
+    if (userProgressDoc.exists()) {
+      userProgress = userProgressDoc.data() as UserProgress;
+    } else {
+      userProgress = {
+        userId,
+        subjects: {},
+        learningStreak: 0,
+        totalStudyTime: 0,
+        weeklyGoals: {
+          target: 10,
+          achieved: 0
+        }
+      };
+    }
+
+    // Update subject progress
+    if (!userProgress.subjects[subjectId]) {
+      userProgress.subjects[subjectId] = {
+        progress: 0,
+        lastActivity: new Date(),
+        completedVideos: [],
+        masteredConcepts: [],
+        quizScores: {},
+        reflections: []
+      };
+    }
+
+    // Update quiz scores and last activity
+    userProgress.subjects[subjectId].quizScores[quizId] = score;
+    userProgress.subjects[subjectId].lastActivity = new Date();
+
+    // Add video to completed videos if not already there
+    if (!userProgress.subjects[subjectId].completedVideos.includes(videoId)) {
+      userProgress.subjects[subjectId].completedVideos.push(videoId);
+    }
+
+    // Calculate overall subject progress
+    const subjectProgress = userProgress.subjects[subjectId];
+    const totalQuizzes = Object.keys(subjectProgress.quizScores).length;
+    const totalScore = Object.values(subjectProgress.quizScores).reduce((sum, score) => sum + score, 0);
+    subjectProgress.progress = Math.round((totalScore / totalQuizzes) * 100) / 100;
+
+    // Save updated progress
+    await setDoc(userProgressRef, userProgress);
+
+    return attempt;
   } catch (error) {
     console.error('Error saving quiz attempt:', error);
     throw error;

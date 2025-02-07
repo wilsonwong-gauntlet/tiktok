@@ -4,14 +4,16 @@ import { Quiz, QuizAttempt } from '../types/video';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import { saveQuizAttempt } from '../services/firebase/learning';
 
 interface QuizPanelProps {
   quiz: Quiz;
   videoId: string;
+  subjectId: string;
   onComplete?: (score: number) => void;
 }
 
-export default function QuizPanel({ quiz, videoId, onComplete }: QuizPanelProps) {
+export default function QuizPanel({ quiz, videoId, subjectId, onComplete }: QuizPanelProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -63,19 +65,14 @@ export default function QuizPanel({ quiz, videoId, onComplete }: QuizPanelProps)
 
       // Save attempt if user is logged in
       if (auth.currentUser) {
-        const attempt: QuizAttempt = {
-          id: `${quiz.id}_${Date.now()}`,
-          userId: auth.currentUser.uid,
-          quizId: quiz.id,
-          answers: newAnswers,
-          score: finalScore,
-          completedAt: new Date()
-        };
-
         try {
-          await setDoc(
-            doc(db, 'users', auth.currentUser.uid, 'quizAttempts', quiz.id),
-            attempt
+          await saveQuizAttempt(
+            auth.currentUser.uid,
+            quiz.id,
+            newAnswers,
+            finalScore,
+            videoId,
+            subjectId
           );
         } catch (error) {
           console.error('Error saving quiz attempt:', error);

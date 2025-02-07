@@ -15,6 +15,7 @@ interface LearningPanelProps {
   onClose: () => void;
   title: string;
   videoId: string;
+  subjectId: string;
   summary?: VideoSummary;
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
@@ -66,6 +67,7 @@ export default function LearningPanel({
   onClose,
   title,
   videoId,
+  subjectId,
   summary: initialSummary,
   furtherReading,
   quiz,
@@ -165,7 +167,14 @@ export default function LearningPanel({
       }, 0);
       const scorePercentage = (score / quiz.questions.length) * 100;
       
-      await saveQuizAttempt(auth.currentUser.uid, quiz.id, quizAnswers, scorePercentage);
+      await saveQuizAttempt(
+        auth.currentUser.uid,
+        quiz.id,
+        quizAnswers,
+        scorePercentage,
+        videoId,
+        subjectId
+      );
       setQuizScore(scorePercentage);
       setQuizSubmitted(true);
     } catch (error) {
@@ -611,10 +620,18 @@ export default function LearningPanel({
       <QuizPanel
         quiz={quiz}
         videoId={videoId}
+        subjectId={subjectId}
         onComplete={(score) => {
           // Update user progress when quiz is completed
           if (auth.currentUser) {
-            saveQuizAttempt(auth.currentUser.uid, quiz.id, [], score);
+            saveQuizAttempt(
+              auth.currentUser.uid,
+              quiz.id,
+              [],
+              score,
+              videoId,
+              subjectId
+            );
           }
         }}
       />

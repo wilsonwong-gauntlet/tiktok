@@ -268,6 +268,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         onClose={() => setLearningPanelVisible(false)}
         title={video.title}
         videoId={video.id}
+        subjectId={video.subjectId}
         summary={video.summary}
         furtherReading={furtherReading}
         quiz={currentQuiz}
