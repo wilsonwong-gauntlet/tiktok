@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
-  TextInput
+  TextInput,
+  TextStyle,
+  ViewStyle
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { db } from '../../../services/firebase';
 import QuizPanel from '../../../components/QuizPanel';
 import { getLastQuizAttempt } from '../../../services/firebase/learning';
+import Markdown from 'react-native-markdown-display';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
@@ -61,6 +64,70 @@ interface VideoWithQuiz {
   authorName: string;
   quiz?: Quiz;
 }
+
+const markdownStyles = StyleSheet.create({
+  body: {
+    color: '#fff',
+    fontSize: 16,
+  } as TextStyle,
+  heading1: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+    marginVertical: 10,
+  } as TextStyle,
+  heading2: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+    marginVertical: 8,
+  } as TextStyle,
+  heading3: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginVertical: 6,
+  } as TextStyle,
+  strong: {
+    color: '#fff',
+    fontWeight: '700',
+  } as TextStyle,
+  em: {
+    color: '#fff',
+    fontStyle: 'italic',
+  } as TextStyle,
+  link: {
+    color: '#1a472a',
+  } as TextStyle,
+  bullet_list: {
+    marginVertical: 8,
+  } as ViewStyle,
+  ordered_list: {
+    marginVertical: 8,
+  } as ViewStyle,
+  code_inline: {
+    color: '#fff',
+    backgroundColor: '#333',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontFamily: 'Courier',
+  } as TextStyle,
+  code_block: {
+    color: '#fff',
+    backgroundColor: '#333',
+    padding: 10,
+    borderRadius: 8,
+    fontFamily: 'Courier',
+    marginVertical: 8,
+  } as TextStyle,
+  blockquote: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#666',
+    paddingLeft: 10,
+    marginVertical: 8,
+  } as ViewStyle,
+});
 
 export default function SubjectDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -572,8 +639,9 @@ export default function SubjectDetailScreen() {
                           <Text style={styles.expandedTitle}>Key Points</Text>
                           {summary.key_points.map((point, index) => (
                             <View key={index} style={styles.bulletPoint}>
-                              <Text style={styles.bulletDot}>•</Text>
-                              <Text style={styles.bulletText}>{point}</Text>
+                              <Markdown style={markdownStyles}>
+                                {point}
+                              </Markdown>
                             </View>
                           ))}
                         </View>
