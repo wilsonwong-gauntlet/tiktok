@@ -143,7 +143,7 @@ export default function VideoSummarySection({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Key Points</Text>
         {summary.key_points.map((point: string, index: number) => (
-          <View key={index} style={styles.bulletPoint}>
+          <View key={index} style={styles.card}>
             <Markdown style={markdownStyles}>
               {point}
             </Markdown>
@@ -153,14 +153,16 @@ export default function VideoSummarySection({
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Main Concepts</Text>
-        <View style={styles.conceptsContainer}>
-          {summary.main_concepts.map((concept: string, index: number) => (
-            <View key={index} style={styles.conceptTag}>
-              <Markdown style={markdownStyles}>
-                {concept}
-              </Markdown>
-            </View>
-          ))}
+        <View style={styles.card}>
+          <View style={styles.conceptsContainer}>
+            {summary.main_concepts.map((concept: string, index: number) => (
+              <View key={index} style={styles.conceptTag}>
+                <Markdown style={markdownStyles}>
+                  {concept}
+                </Markdown>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -180,7 +182,7 @@ export default function VideoSummarySection({
         {renderTranscriptionStatus()}
         
         {showTranscription && transcription && (
-          <View style={styles.transcriptionContent}>
+          <View style={styles.card}>
             <Text style={styles.transcriptionText}>{transcription}</Text>
           </View>
         )}
@@ -202,25 +204,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 10,
   },
-  bulletPoint: {
-    flexDirection: 'row',
-    marginBottom: 5,
-    paddingRight: 15,
-  },
-  bulletDot: {
-    color: '#fff',
-    marginRight: 8,
-    fontSize: 16,
-  },
-  bulletText: {
-    color: '#fff',
-    flex: 1,
-    fontSize: 16,
+  card: {
+    backgroundColor: '#222',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   conceptsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 5,
+    marginTop: -4,
+    marginBottom: -4,
   },
   conceptTag: {
     backgroundColor: '#333',
@@ -228,11 +222,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 15,
     marginRight: 8,
-    marginBottom: 8,
-  },
-  conceptText: {
-    color: '#fff',
-    fontSize: 14,
+    marginVertical: 4,
   },
   loadingContainer: {
     padding: 20,
@@ -268,11 +258,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  transcriptionContent: {
-    backgroundColor: '#222',
-    padding: 15,
-    borderRadius: 8,
   },
   transcriptionText: {
     color: '#fff',

@@ -24,7 +24,19 @@ interface LearningPanelProps {
   onFurtherReadingGenerated?: (reading: FurtherReading[]) => void;
 }
 
-type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'intuition' | 'transcription';
+type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'transcription';
+
+interface Notes {
+  content: string;
+  keyTakeaways: string[];
+}
+
+interface Reflections {
+  understanding: string[];
+  gaps: string[];
+  applications: string[];
+  connections: string[];
+}
 
 const REFLECTION_TEMPLATE = {
   understanding: [
@@ -63,18 +75,15 @@ export default function LearningPanel({
   onFurtherReadingGenerated,
 }: LearningPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('summary');
-  const [notes, setNotes] = useState('');
-  const [keyTakeaways, setKeyTakeaways] = useState<string[]>(['']);
-  const [reflections, setReflections] = useState<{
-    understanding: string[];
-    gaps: string[];
-    applications: string[];
-    connections: string[];
-  }>({
-    understanding: ['', '', ''],
-    gaps: ['', '', ''],
-    applications: ['', '', ''],
-    connections: ['', '', ''],
+  const [notes, setNotes] = useState<Notes>({
+    content: '',
+    keyTakeaways: []
+  });
+  const [reflections, setReflections] = useState<Reflections>({
+    understanding: [],
+    gaps: [],
+    applications: [],
+    connections: []
   });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
@@ -100,11 +109,16 @@ export default function LearningPanel({
       setLoading(true);
       const note = await getNoteForVideo(auth.currentUser.uid, videoId);
       if (note) {
-        setNotes(note.content);
-        setKeyTakeaways(note.keyTakeaways);
-        if (note.reflections) {
-          setReflections(note.reflections);
-        }
+        setNotes({
+          content: note.content,
+          keyTakeaways: note.keyTakeaways || []
+        });
+        setReflections(note.reflections || {
+          understanding: [],
+          gaps: [],
+          applications: [],
+          connections: []
+        });
       }
     } catch (error) {
       console.error('Error loading notes:', error);
@@ -118,7 +132,7 @@ export default function LearningPanel({
     
     try {
       setSaveStatus('saving');
-      await saveNote(auth.currentUser.uid, videoId, notes, keyTakeaways, reflections);
+      await saveNote(auth.currentUser.uid, videoId, notes.content, notes.keyTakeaways, reflections);
       setSaveStatus('success');
       // Reset status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -130,13 +144,13 @@ export default function LearningPanel({
   };
 
   const handleReflectionChange = (
-    section: keyof typeof reflections,
+    section: keyof Reflections,
     index: number,
-    value: string
+    text: string
   ) => {
     setReflections(prev => ({
       ...prev,
-      [section]: prev[section].map((item, i) => i === index ? value : item)
+      [section]: prev[section].map((item, i) => (i === index ? text : item))
     }));
   };
 
@@ -183,7 +197,10 @@ export default function LearningPanel({
   };
 
   const handleAddTakeaway = () => {
-    setKeyTakeaways([...keyTakeaways, '']);
+    setNotes(prev => ({
+      ...prev,
+      keyTakeaways: [...prev.keyTakeaways, '']
+    }));
   };
 
   const handleGenerateQuiz = async () => {
@@ -357,164 +374,200 @@ export default function LearningPanel({
         return renderQuizContent();
       case 'reading':
         return renderReadingContent();
-      case 'intuition':
-        return (
-          <ScrollView style={styles.content}>
-            <View style={styles.intuitionSection}>
-              <Text style={styles.sectionTitle}>Mental Models</Text>
-              <Text style={styles.promptText}>
-                How would you explain this concept to a:
-              </Text>
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="5-year-old child..."
-                placeholderTextColor="#666"
-              />
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="High school student..."
-                placeholderTextColor="#666"
-              />
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="Expert in a different field..."
-                placeholderTextColor="#666"
-              />
-            </View>
-
-            <View style={styles.intuitionSection}>
-              <Text style={styles.sectionTitle}>Visual Understanding</Text>
-              <Text style={styles.promptText}>
-                Draw or describe a visual metaphor for this concept:
-              </Text>
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="Describe your visual metaphor..."
-                placeholderTextColor="#666"
-              />
-            </View>
-
-            <View style={styles.intuitionSection}>
-              <Text style={styles.sectionTitle}>Pattern Recognition</Text>
-              <Text style={styles.promptText}>
-                What patterns or principles do you notice?
-              </Text>
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="Describe the patterns you see..."
-                placeholderTextColor="#666"
-              />
-              <Text style={styles.promptText}>
-                Where else have you seen similar patterns?
-              </Text>
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="List similar patterns in other contexts..."
-                placeholderTextColor="#666"
-              />
-            </View>
-
-            <View style={styles.intuitionSection}>
-              <Text style={styles.sectionTitle}>Edge Cases</Text>
-              <Text style={styles.promptText}>
-                When might this concept break down or not apply?
-              </Text>
-              <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="Describe edge cases and limitations..."
-                placeholderTextColor="#666"
-              />
-            </View>
-          </ScrollView>
-        );
     }
   };
 
   const renderNotesContent = () => (
-    <ScrollView style={styles.content}>
-      <Text style={styles.label}>Quick Capture</Text>
-      <TextInput
-        style={styles.notesInput}
-        multiline
-        placeholder="Write your immediate thoughts..."
-        placeholderTextColor="#666"
-        value={notes}
-        onChangeText={setNotes}
-      />
-      
-      <Text style={styles.sectionTitle}>Structured Reflection</Text>
-      {Object.entries(REFLECTION_TEMPLATE).map(([section, prompts]) => (
-        <View key={section} style={styles.reflectionSection}>
-          <Text style={styles.reflectionTitle}>
-            {section.charAt(0).toUpperCase() + section.slice(1)}
-          </Text>
-          {prompts.map((prompt, index) => (
-            <View key={index} style={styles.promptContainer}>
-              <Text style={styles.promptText}>{prompt}</Text>
+    <ScrollView style={styles.tabContent}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Capture</Text>
+        <TextInput
+          style={styles.textInput}
+          multiline
+          placeholder="Capture your thoughts..."
+          placeholderTextColor="#666"
+          value={notes.content}
+          onChangeText={text => setNotes(prev => ({ ...prev, content: text }))}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Key Takeaways</Text>
+        {notes.keyTakeaways.map((takeaway, index) => (
+          <View key={index} style={styles.takeawayContainer}>
+            <TextInput
+              style={styles.textInput}
+              value={takeaway}
+              onChangeText={text => {
+                const newTakeaways = [...notes.keyTakeaways];
+                newTakeaways[index] = text;
+                setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
+              }}
+              placeholder="Add a key takeaway..."
+              placeholderTextColor="#666"
+            />
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={() => {
+                const newTakeaways = notes.keyTakeaways.filter((_, i) => i !== index);
+                setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
+              }}
+            >
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity style={styles.addButton} onPress={handleAddTakeaway}>
+          <Text style={styles.addButtonText}>+ Add Takeaway</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Reflections</Text>
+        
+        <View style={styles.reflectionSection}>
+          <Text style={styles.reflectionTitle}>Understanding</Text>
+          <Text style={styles.reflectionSubtitle}>What are the main concepts you understand well?</Text>
+          {reflections.understanding.map((item, index) => (
+            <View key={index} style={styles.reflectionInputContainer}>
               <TextInput
-                style={styles.reflectionInput}
-                multiline
-                placeholder="Your thoughts..."
+                style={styles.textInput}
+                value={item}
+                onChangeText={text => handleReflectionChange('understanding', index, text)}
+                placeholder="Add reflection..."
                 placeholderTextColor="#666"
-                value={reflections[section as keyof typeof reflections][index]}
-                onChangeText={(text) => handleReflectionChange(section as keyof typeof reflections, index, text)}
               />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  const newReflections = reflections.understanding.filter((_, i) => i !== index);
+                  setReflections(prev => ({ ...prev, understanding: newReflections }));
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
             </View>
           ))}
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setReflections(prev => ({
+              ...prev,
+              understanding: [...prev.understanding, '']
+            }))}
+          >
+            <Text style={styles.addButtonText}>+ Add Understanding</Text>
+          </TouchableOpacity>
         </View>
-      ))}
 
-      <Text style={styles.label}>Key Takeaways</Text>
-      {keyTakeaways.map((takeaway, index) => (
-        <View key={index} style={styles.takeawayContainer}>
-          <TextInput
-            style={styles.takeawayInput}
-            multiline
-            value={takeaway}
-            onChangeText={(text) => {
-              const newTakeaways = [...keyTakeaways];
-              newTakeaways[index] = text;
-              setKeyTakeaways(newTakeaways);
-            }}
-            placeholder="Enter a key takeaway..."
-            placeholderTextColor="#666"
-          />
+        <View style={styles.reflectionSection}>
+          <Text style={styles.reflectionTitle}>Knowledge Gaps</Text>
+          <Text style={styles.reflectionSubtitle}>What concepts need more clarification?</Text>
+          {reflections.gaps.map((item, index) => (
+            <View key={index} style={styles.reflectionInputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={item}
+                onChangeText={text => handleReflectionChange('gaps', index, text)}
+                placeholder="Add gap..."
+                placeholderTextColor="#666"
+              />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  const newReflections = reflections.gaps.filter((_, i) => i !== index);
+                  setReflections(prev => ({ ...prev, gaps: newReflections }));
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setReflections(prev => ({
+              ...prev,
+              gaps: [...prev.gaps, '']
+            }))}
+          >
+            <Text style={styles.addButtonText}>+ Add Gap</Text>
+          </TouchableOpacity>
         </View>
-      ))}
-      
+
+        <View style={styles.reflectionSection}>
+          <Text style={styles.reflectionTitle}>Applications</Text>
+          <Text style={styles.reflectionSubtitle}>How can you apply these concepts?</Text>
+          {reflections.applications.map((item, index) => (
+            <View key={index} style={styles.reflectionInputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={item}
+                onChangeText={text => handleReflectionChange('applications', index, text)}
+                placeholder="Add application..."
+                placeholderTextColor="#666"
+              />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  const newReflections = reflections.applications.filter((_, i) => i !== index);
+                  setReflections(prev => ({ ...prev, applications: newReflections }));
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setReflections(prev => ({
+              ...prev,
+              applications: [...prev.applications, '']
+            }))}
+          >
+            <Text style={styles.addButtonText}>+ Add Application</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.reflectionSection}>
+          <Text style={styles.reflectionTitle}>Connections</Text>
+          <Text style={styles.reflectionSubtitle}>How does this connect to other concepts?</Text>
+          {reflections.connections.map((item, index) => (
+            <View key={index} style={styles.reflectionInputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={item}
+                onChangeText={text => handleReflectionChange('connections', index, text)}
+                placeholder="Add connection..."
+                placeholderTextColor="#666"
+              />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  const newReflections = reflections.connections.filter((_, i) => i !== index);
+                  setReflections(prev => ({ ...prev, connections: newReflections }));
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setReflections(prev => ({
+              ...prev,
+              connections: [...prev.connections, '']
+            }))}
+          >
+            <Text style={styles.addButtonText}>+ Add Connection</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <TouchableOpacity 
-        style={styles.addButton} 
-        onPress={handleAddTakeaway}
-      >
-        <Text style={styles.addButtonText}>+ Add Takeaway</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[
-          styles.button,
-          saveStatus === 'saving' && styles.buttonDisabled
-        ]}
+        style={styles.saveButton} 
         onPress={handleSaveNotes}
-        disabled={saveStatus === 'saving'}
       >
-        <Text style={styles.buttonText}>
-          {saveStatus === 'saving' ? 'Saving...' : 'Save Reflection'}
-        </Text>
+        <Text style={styles.saveButtonText}>Save Notes</Text>
       </TouchableOpacity>
-
-      {saveStatus === 'success' && (
-        <Text style={styles.successText}>✓ Saved successfully</Text>
-      )}
-      {saveStatus === 'error' && (
-        <Text style={styles.errorText}>⚠ Error saving reflection</Text>
-      )}
     </ScrollView>
   );
 
@@ -590,7 +643,6 @@ export default function LearningPanel({
             {renderTab('notes', 'Notes', 'pencil-outline')}
             {renderTab('quiz', 'Quiz', 'school-outline')}
             {renderTab('reading', 'Reading', 'book-outline')}
-            {renderTab('intuition', 'Intuition', 'bulb-outline')}
           </View>
 
           {renderContent()}
@@ -939,5 +991,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 12,
     textAlign: 'center',
+  },
+  textInput: {
+    backgroundColor: '#222',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    flex: 1,
+    minHeight: 40,
+    marginBottom: 8,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  reflectionSubtitle: {
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  reflectionInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  removeButton: {
+    padding: 4,
+  },
+  saveButton: {
+    backgroundColor: '#333',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 
