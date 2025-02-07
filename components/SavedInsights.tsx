@@ -33,6 +33,8 @@ export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedIns
   const [savedSummaries, setSavedSummaries] = useState<SavedSummary[]>(cachedInsights || []);
   const [loading, setLoading] = useState(!cachedInsights);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -82,9 +84,35 @@ export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedIns
     }
   };
 
-  const handleShareSummary = async (summary: SavedSummary) => {
-    const summaryText = [
-      '📊 Community Insights Summary',
+  const toggleSelection = (videoId: string) => {
+    const newSelection = new Set(selectedItems);
+    if (newSelection.has(videoId)) {
+      newSelection.delete(videoId);
+    } else {
+      newSelection.add(videoId);
+    }
+    setSelectedItems(newSelection);
+    setIsSelectionMode(newSelection.size > 0);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === savedSummaries.length) {
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    } else {
+      setSelectedItems(new Set(savedSummaries.map(summary => summary.videoId)));
+    }
+  };
+
+  const handleBulkShare = async () => {
+    if (selectedItems.size === 0) return;
+
+    const selectedSummaries = savedSummaries.filter(summary => 
+      selectedItems.has(summary.videoId)
+    );
+
+    const summaryText = selectedSummaries.map(summary => [
+      `📊 Community Insights Summary for ${summary.videoTitle || 'Video'}`,
       '',
       '💭 Main Discussion:',
       summary.summary,
@@ -99,36 +127,81 @@ export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedIns
       summary.sentiment,
       '',
       `Based on ${summary.commentCount} comments`,
-    ].join('\n');
+      '-------------------',
+    ].join('\n')).join('\n\n');
 
     try {
       await Share.share({
         message: summaryText,
       });
     } catch (error) {
-      console.error('Error sharing summary:', error);
+      console.error('Error sharing summaries:', error);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!auth.currentUser || selectedItems.size === 0) return;
+
+    try {
+      const deletePromises = Array.from(selectedItems).map(videoId => 
+        deleteDoc(doc(db, `users/${auth.currentUser!.uid}/savedSummaries/${videoId}`))
+      );
+      await Promise.all(deletePromises);
+
+      const updatedSummaries = savedSummaries.filter(
+        summary => !selectedItems.has(summary.videoId)
+      );
+      setSavedSummaries(updatedSummaries);
+      onDataLoaded?.(updatedSummaries);
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Error deleting summaries:', error);
     }
   };
 
   const renderSummaryRow = ({ item: summary }: { item: SavedSummary }) => (
     <TouchableOpacity 
-      style={styles.row}
-      onPress={() => router.push(`/video/${summary.videoId}`)}
+      style={[
+        styles.row,
+        selectedItems.has(summary.videoId) && styles.selectedRow
+      ]}
+      onLongPress={() => {
+        setIsSelectionMode(true);
+        toggleSelection(summary.videoId);
+      }}
+      onPress={() => {
+        if (isSelectionMode) {
+          toggleSelection(summary.videoId);
+        } else {
+          router.push(`/video/${summary.videoId}`);
+        }
+      }}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
           <View style={styles.rowLeft}>
+            {isSelectionMode && (
+              <Ionicons 
+                name={selectedItems.has(summary.videoId) ? "checkbox" : "square-outline"} 
+                size={20} 
+                color={selectedItems.has(summary.videoId) ? "#1a472a" : "#666"}
+                style={styles.checkbox}
+              />
+            )}
             <Ionicons name="chatbubbles-outline" size={16} color="#666" />
             <Text style={styles.summaryText} numberOfLines={2}>
               {summary.summary}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleRemoveSummary(summary.videoId)}
-          >
-            <Ionicons name="trash-outline" size={16} color="#666" />
-          </TouchableOpacity>
+          {!isSelectionMode && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleRemoveSummary(summary.videoId)}
+            >
+              <Ionicons name="trash-outline" size={16} color="#666" />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
@@ -138,6 +211,42 @@ export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedIns
       </View>
     </TouchableOpacity>
   );
+
+  const renderHeader = () => {
+    if (!isSelectionMode || savedSummaries.length === 0) return null;
+
+    return (
+      <View style={styles.selectionHeader}>
+        <TouchableOpacity 
+          style={styles.selectionButton} 
+          onPress={toggleSelectAll}
+        >
+          <Ionicons 
+            name={selectedItems.size === savedSummaries.length ? "checkbox" : "square-outline"} 
+            size={20} 
+            color="#666" 
+          />
+          <Text style={styles.selectionButtonText}>
+            {selectedItems.size === savedSummaries.length ? 'Deselect All' : 'Select All'}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.selectionActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBulkShare}
+          >
+            <Ionicons name="share-outline" size={20} color="#666" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBulkDelete}
+          >
+            <Ionicons name="trash-outline" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -157,6 +266,7 @@ export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedIns
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
       <FlatList
         data={savedSummaries}
         renderItem={renderSummaryRow}
@@ -181,6 +291,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  selectedRow: {
+    backgroundColor: 'rgba(26, 71, 42, 0.2)',
+  },
   rowContent: {
     gap: 4,
   },
@@ -195,6 +308,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
+  },
+  checkbox: {
+    marginRight: 4,
   },
   summaryText: {
     flex: 1,
@@ -231,5 +347,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 16,
     textAlign: 'center',
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  selectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectionButtonText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  actionButton: {
+    padding: 4,
   },
 }); 

@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../services/firebase/index';
@@ -28,6 +29,8 @@ export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps)
   const [quizzes, setQuizzes] = useState<QuizWithMeta[]>(cachedQuizzes || []);
   const [loading, setLoading] = useState(!cachedQuizzes);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -93,14 +96,93 @@ export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps)
     }
   };
 
+  const toggleSelection = (id: string) => {
+    const newSelection = new Set(selectedItems);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedItems(newSelection);
+    setIsSelectionMode(newSelection.size > 0);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === quizzes.length) {
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    } else {
+      setSelectedItems(new Set(quizzes.map(quiz => quiz.id)));
+    }
+  };
+
+  const handleBulkShare = async () => {
+    if (selectedItems.size === 0) return;
+
+    const selectedQuizzes = quizzes.filter(quiz => 
+      selectedItems.has(quiz.id)
+    );
+
+    const quizText = selectedQuizzes.map(quiz => [
+      `📝 Quiz from ${quiz.videoTitle}`,
+      `Subject: ${quiz.subjectName}`,
+      '',
+      quiz.lastAttempt ? 
+        `Your Score: ${Math.round(quiz.lastAttempt.score * 100)}%` : 
+        'Not attempted yet',
+      '',
+      'Questions:',
+      ...quiz.questions.map((q, i) => [
+        `${i + 1}. ${q.question}`,
+        ...q.options.map((opt, j) => `   ${String.fromCharCode(65 + j)}. ${opt}`),
+        quiz.lastAttempt ? 
+          `Your answer: ${String.fromCharCode(65 + quiz.lastAttempt.answers[i])}` : 
+          'Not answered',
+        `Correct answer: ${String.fromCharCode(65 + q.correctOptionIndex)}`,
+        `Explanation: ${q.explanation}`,
+        ''
+      ].join('\n')),
+      '-------------------',
+    ].join('\n')).join('\n\n');
+
+    try {
+      await Share.share({
+        message: quizText,
+      });
+    } catch (error) {
+      console.error('Error sharing quizzes:', error);
+    }
+  };
+
   const renderQuizRow = ({ item }: { item: QuizWithMeta }) => (
     <TouchableOpacity
-      style={styles.row}
-      onPress={() => router.push(`/video/${item.videoId}?highlight=quiz`)}
+      style={[
+        styles.row,
+        selectedItems.has(item.id) && styles.selectedRow
+      ]}
+      onLongPress={() => {
+        setIsSelectionMode(true);
+        toggleSelection(item.id);
+      }}
+      onPress={() => {
+        if (isSelectionMode) {
+          toggleSelection(item.id);
+        } else {
+          router.push(`/video/${item.videoId}?highlight=quiz`);
+        }
+      }}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
           <View style={styles.rowLeft}>
+            {isSelectionMode && (
+              <Ionicons 
+                name={selectedItems.has(item.id) ? "checkbox" : "square-outline"} 
+                size={20} 
+                color={selectedItems.has(item.id) ? "#1a472a" : "#666"}
+                style={styles.checkbox}
+              />
+            )}
             <Ionicons 
               name={item.lastAttempt ? "checkmark-circle" : "school-outline"} 
               size={16} 
@@ -120,7 +202,9 @@ export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps)
               )}
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#666" />
+          {!isSelectionMode && (
+            <Ionicons name="chevron-forward" size={16} color="#666" />
+          )}
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
@@ -130,6 +214,36 @@ export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps)
       </View>
     </TouchableOpacity>
   );
+
+  const renderHeader = () => {
+    if (!isSelectionMode || quizzes.length === 0) return null;
+
+    return (
+      <View style={styles.selectionHeader}>
+        <TouchableOpacity 
+          style={styles.selectionButton} 
+          onPress={toggleSelectAll}
+        >
+          <Ionicons 
+            name={selectedItems.size === quizzes.length ? "checkbox" : "square-outline"} 
+            size={20} 
+            color="#666" 
+          />
+          <Text style={styles.selectionButtonText}>
+            {selectedItems.size === quizzes.length ? 'Deselect All' : 'Select All'}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.selectionActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBulkShare}
+          >
+            <Ionicons name="share-outline" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -149,6 +263,7 @@ export default function QuizList({ cachedQuizzes, onDataLoaded }: QuizListProps)
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
       <FlatList
         data={quizzes}
         renderItem={renderQuizRow}
@@ -173,6 +288,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  selectedRow: {
+    backgroundColor: 'rgba(26, 71, 42, 0.2)',
+  },
   rowContent: {
     gap: 4,
   },
@@ -187,6 +305,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
+  },
+  checkbox: {
+    marginRight: 4,
   },
   textContent: {
     flex: 1,
@@ -225,5 +346,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 16,
     textAlign: 'center',
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  selectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectionButtonText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  actionButton: {
+    padding: 4,
   },
 }); 

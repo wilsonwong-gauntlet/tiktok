@@ -32,6 +32,8 @@ export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps)
   const [notes, setNotes] = useState<Note[]>(cachedNotes || []);
   const [loading, setLoading] = useState(!cachedNotes);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -155,33 +157,125 @@ export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps)
     }
   };
 
+  const toggleSelection = (id: string) => {
+    const newSelection = new Set(selectedItems);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedItems(newSelection);
+    setIsSelectionMode(newSelection.size > 0);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === notes.length) {
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    } else {
+      setSelectedItems(new Set(notes.map(note => note.id)));
+    }
+  };
+
+  const handleBulkShare = async () => {
+    if (selectedItems.size === 0) return;
+
+    const selectedNotes = notes.filter(note => 
+      selectedItems.has(note.id)
+    );
+
+    const notesText = selectedNotes.map(note => [
+      '📝 Video Note',
+      '',
+      note.content,
+      '',
+      `📺 From: ${note.videoTitle}`,
+      `⏱️ At: ${formatVideoTimestamp(note.timestamp)}`,
+      `📚 Subject: ${note.subjectName}`,
+      `📅 Created: ${note.createdAt.toLocaleDateString()}`,
+      '-------------------',
+    ].join('\n')).join('\n\n');
+
+    try {
+      await Share.share({
+        message: notesText,
+      });
+    } catch (error) {
+      console.error('Error sharing notes:', error);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!auth.currentUser || selectedItems.size === 0) return;
+
+    try {
+      const deletePromises = Array.from(selectedItems).map(noteId => 
+        deleteDoc(doc(db, `users/${auth.currentUser!.uid}/notes/${noteId}`))
+      );
+      await Promise.all(deletePromises);
+
+      const updatedNotes = notes.filter(
+        note => !selectedItems.has(note.id)
+      );
+      setNotes(updatedNotes);
+      onDataLoaded?.(updatedNotes);
+      setSelectedItems(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Error deleting notes:', error);
+    }
+  };
+
   const renderNoteRow = ({ item: note }: { item: Note }) => (
     <TouchableOpacity
-      style={styles.row}
-      onPress={() => router.push(`/video/${note.videoId}?timestamp=${note.timestamp}`)}
+      style={[
+        styles.row,
+        selectedItems.has(note.id) && styles.selectedRow
+      ]}
+      onLongPress={() => {
+        setIsSelectionMode(true);
+        toggleSelection(note.id);
+      }}
+      onPress={() => {
+        if (isSelectionMode) {
+          toggleSelection(note.id);
+        } else {
+          router.push(`/video/${note.videoId}?timestamp=${note.timestamp}`);
+        }
+      }}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
           <View style={styles.rowLeft}>
+            {isSelectionMode && (
+              <Ionicons 
+                name={selectedItems.has(note.id) ? "checkbox" : "square-outline"} 
+                size={20} 
+                color={selectedItems.has(note.id) ? "#1a472a" : "#666"}
+                style={styles.checkbox}
+              />
+            )}
             <Ionicons name="document-text-outline" size={16} color="#666" />
             <Text style={styles.noteText} numberOfLines={2}>
               {note.content}
             </Text>
           </View>
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleShareNote(note)}
-            >
-              <Ionicons name="share-outline" size={16} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleDeleteNote(note.id)}
-            >
-              <Ionicons name="trash-outline" size={16} color="#666" />
-            </TouchableOpacity>
-          </View>
+          {!isSelectionMode && (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleShareNote(note)}
+              >
+                <Ionicons name="share-outline" size={16} color="#666" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleDeleteNote(note.id)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#666" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
@@ -191,6 +285,42 @@ export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps)
       </View>
     </TouchableOpacity>
   );
+
+  const renderHeader = () => {
+    if (!isSelectionMode || notes.length === 0) return null;
+
+    return (
+      <View style={styles.selectionHeader}>
+        <TouchableOpacity 
+          style={styles.selectionButton} 
+          onPress={toggleSelectAll}
+        >
+          <Ionicons 
+            name={selectedItems.size === notes.length ? "checkbox" : "square-outline"} 
+            size={20} 
+            color="#666" 
+          />
+          <Text style={styles.selectionButtonText}>
+            {selectedItems.size === notes.length ? 'Deselect All' : 'Select All'}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.selectionActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBulkShare}
+          >
+            <Ionicons name="share-outline" size={20} color="#666" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBulkDelete}
+          >
+            <Ionicons name="trash-outline" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -210,6 +340,7 @@ export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps)
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
       <FlatList
         data={notes}
         renderItem={renderNoteRow}
@@ -234,6 +365,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  selectedRow: {
+    backgroundColor: 'rgba(26, 71, 42, 0.2)',
+  },
   rowContent: {
     gap: 4,
   },
@@ -248,6 +382,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
+  },
+  checkbox: {
+    marginRight: 4,
   },
   noteText: {
     flex: 1,
@@ -288,5 +425,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 16,
     textAlign: 'center',
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  selectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectionButtonText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: 16,
   },
 }); 
