@@ -11,6 +11,10 @@ import {onCall, CallableRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import OpenAI from "openai";
 import {defineSecret} from "firebase-functions/params";
+import * as admin from "firebase-admin";
+
+// Initialize Firebase Admin
+admin.initializeApp();
 
 // Define secrets
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
@@ -628,6 +632,14 @@ export const generateFurtherReading = onCall(
         "Successfully generated further reading recommendations:",
         validRecommendations
       );
+
+      // Save recommendations to Firestore
+      const videoRef = admin.firestore().collection("videos").doc(videoId);
+      await videoRef.update({
+        furtherReading: validRecommendations,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      logger.info("Saved recommendations to Firestore");
 
       return validRecommendations;
     } catch (error) {

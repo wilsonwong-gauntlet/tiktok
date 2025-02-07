@@ -212,13 +212,6 @@ export default function LearningPanel({
         { timeout: 300000 } // 5 minutes in milliseconds
       );
 
-      // Show a loading message to the user
-      Alert.alert(
-        'Generating Recommendations',
-        'This may take a few minutes. Please keep the app open.',
-        [{ text: 'OK' }]
-      );
-
       const result = await generateFurtherReading({
         videoId,
         transcription,
