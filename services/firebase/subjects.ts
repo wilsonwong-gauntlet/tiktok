@@ -149,4 +149,54 @@ export class SubjectService {
       throw error;
     }
   }
+
+  static async getUserProgress(userId: string): Promise<UserProgress | null> {
+    try {
+      const progressRef = doc(db, 'userProgress', userId);
+      const progressDoc = await getDoc(progressRef);
+      
+      if (progressDoc.exists()) {
+        return progressDoc.data() as UserProgress;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user progress:', error);
+      throw error;
+    }
+  }
+
+  static async getActiveSubjects(userId: string): Promise<Subject[]> {
+    try {
+      const progressRef = doc(db, 'userProgress', userId);
+      const progressDoc = await getDoc(progressRef);
+      
+      if (progressDoc.exists()) {
+        const progress = progressDoc.data() as UserProgress;
+        const subjects = await Promise.all(
+          Object.keys(progress.subjects).map(id => 
+            this.getSubjectById(id, userId)
+          )
+        );
+        return subjects.filter(Boolean) as Subject[];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting active subjects:', error);
+      throw error;
+    }
+  }
+
+  static async getAllSubjects(): Promise<Subject[]> {
+    try {
+      const subjectsRef = collection(db, 'subjects');
+      const snapshot = await getDocs(subjectsRef);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Subject));
+    } catch (error) {
+      console.error('Error getting all subjects:', error);
+      throw error;
+    }
+  }
 } 
