@@ -21,6 +21,7 @@ interface SavedSummary {
   sentiment: string;
   commentCount: number;
   savedAt: Date;
+  videoTitle?: string;
 }
 
 export default function SavedInsights() {
@@ -44,9 +45,9 @@ export default function SavedInsights() {
       const summariesSnapshot = await getDocs(query(summariesRef));
       
       const summaries = summariesSnapshot.docs.map(doc => ({
-        id: doc.id,
+        videoId: doc.id,
         ...doc.data(),
-        savedAt: doc.data().savedAt?.toDate(),
+        savedAt: doc.data().savedAt?.toDate() || new Date(),
       })) as SavedSummary[];
 
       setSavedSummaries(summaries.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime()));
@@ -98,66 +99,33 @@ export default function SavedInsights() {
     }
   };
 
-  const renderSummaryCard = ({ item: summary }: { item: SavedSummary }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="analytics" size={24} color="#fff" />
-          <Text style={styles.headerTitle}>Community Insights</Text>
-        </View>
-        <View style={styles.headerRight}>
+  const renderSummaryRow = ({ item: summary }: { item: SavedSummary }) => (
+    <TouchableOpacity 
+      style={styles.row}
+      onPress={() => router.push(`/video/${summary.videoId}`)}
+    >
+      <View style={styles.rowContent}>
+        <View style={styles.rowHeader}>
+          <View style={styles.rowLeft}>
+            <Ionicons name="chatbubbles-outline" size={16} color="#666" />
+            <Text style={styles.summaryText} numberOfLines={2}>
+              {summary.summary}
+            </Text>
+          </View>
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleShareSummary(summary)}
-          >
-            <Ionicons name="share-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
+            style={styles.deleteButton}
             onPress={() => handleRemoveSummary(summary.videoId)}
           >
-            <Ionicons name="trash-outline" size={20} color="#ff4444" />
+            <Ionicons name="trash-outline" size={16} color="#666" />
           </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.cardContent}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="chatbubbles-outline" size={16} color="#fff" /> Main Discussion
+        <View style={styles.rowMeta}>
+          <Text style={styles.metaText}>
+            {summary.commentCount} comments • {summary.savedAt.toLocaleDateString()}
           </Text>
-          <Text style={styles.sectionText}>{summary.summary}</Text>
         </View>
-
-        {summary.confusionPoints.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Ionicons name="help-circle-outline" size={16} color="#fff" /> Areas of Confusion
-            </Text>
-            {summary.confusionPoints.map((point, index) => (
-              <Text key={index} style={styles.bulletPoint}>• {point}</Text>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Ionicons name="bulb-outline" size={16} color="#fff" /> Valuable Insights
-          </Text>
-          {summary.valuableInsights.map((insight, index) => (
-            <Text key={index} style={styles.bulletPoint}>• {insight}</Text>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={styles.viewVideoButton}
-          onPress={() => router.push(`/video/${summary.videoId}`)}
-        >
-          <Text style={styles.viewVideoText}>View Video</Text>
-          <Ionicons name="arrow-forward" size={16} color="#fff" />
-        </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -180,16 +148,12 @@ export default function SavedInsights() {
     <View style={styles.container}>
       <FlatList
         data={savedSummaries}
-        renderItem={renderSummaryCard}
+        renderItem={renderSummaryRow}
         keyExtractor={item => item.videoId}
-        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="bookmark-outline" size={48} color="#666" />
-            <Text style={styles.emptyText}>No saved insights yet</Text>
-            <Text style={styles.emptySubtext}>
-              Bookmark community insights from videos to save them here
-            </Text>
+            <Text style={styles.emptyText}>No saved insights</Text>
           </View>
         }
       />
@@ -202,103 +166,59 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#111',
   },
-  list: {
-    padding: 16,
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  card: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#222',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  actionButton: {
-    padding: 4,
-  },
-  cardContent: {
-    padding: 16,
-  },
-  section: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+  rowContent: {
     gap: 4,
   },
-  sectionText: {
+  rowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  rowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  summaryText: {
+    flex: 1,
     color: '#fff',
     fontSize: 14,
     lineHeight: 20,
   },
-  bulletPoint: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
-    marginLeft: 8,
-    marginBottom: 4,
+  deleteButton: {
+    padding: 4,
   },
-  viewVideoButton: {
+  rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#333',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-    marginTop: 8,
+    paddingLeft: 24,
   },
-  viewVideoText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+  metaText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#222',
   },
   emptyContainer: {
+    padding: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
   },
   emptyText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  emptySubtext: {
     color: '#666',
     fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
   },
   errorText: {
     color: '#ff4444',
-    fontSize: 16,
+    fontSize: 14,
+    padding: 16,
     textAlign: 'center',
-    padding: 32,
   },
 }); 

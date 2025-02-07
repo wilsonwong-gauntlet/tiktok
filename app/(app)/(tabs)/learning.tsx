@@ -9,6 +9,8 @@ import { VideoService } from '../../../services/firebase/video';
 import { SubjectService } from '../../../services/firebase/subjects';
 import ReadingList from '../../../components/ReadingList';
 import SavedInsights from '../../../components/SavedInsights';
+import QuizList from '../../../components/QuizList';
+import NotesList from '../../../components/NotesList';
 
 type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
 
@@ -203,21 +205,11 @@ export default function LearningScreen() {
     </ScrollView>
   );
 
-  const renderReadingTab = () => (
-    <ReadingList
-      readings={readings}
-      onResourcePress={(videoId, resource) => {
-        // Navigate to video with the resource highlighted
-        router.push(`/video/${videoId}?highlight=reading`);
-      }}
-    />
-  );
-
   const renderContent = () => {
-    if (loading) {
+    if (!auth.currentUser) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#fff" />
+        <View style={styles.placeholder}>
+          <Text style={styles.placeholderText}>Please sign in to view your learning progress</Text>
         </View>
       );
     }
@@ -226,23 +218,15 @@ export default function LearningScreen() {
       case 'overview':
         return renderOverviewTab();
       case 'reading':
-        return renderReadingTab();
+        return <ReadingList readings={readings} onResourcePress={(videoId, resource) => {
+          router.push(`/video/${videoId}?highlight=reading`);
+        }} />;
       case 'insights':
         return <SavedInsights />;
       case 'quizzes':
-        return (
-          <View style={styles.comingSoon}>
-            <Ionicons name="school-outline" size={48} color="#666" />
-            <Text style={styles.comingSoonText}>Quizzes coming soon!</Text>
-          </View>
-        );
+        return <QuizList />;
       case 'notes':
-        return (
-          <View style={styles.comingSoon}>
-            <Ionicons name="document-text-outline" size={48} color="#666" />
-            <Text style={styles.comingSoonText}>Notes coming soon!</Text>
-          </View>
-        );
+        return <NotesList />;
       default:
         return null;
     }
