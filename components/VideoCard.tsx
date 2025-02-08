@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,11 @@ const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
+// Memoize child components
+const MemoizedCoachingPrompts = memo(CoachingPrompts);
+const MemoizedLearningPanel = memo(LearningPanel);
+const MemoizedCommentSection = memo(CommentSection);
+
 export default function VideoCard({ video, isActive, containerHeight, isModal = false }: VideoCardProps) {
   const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState(false);
@@ -39,6 +44,9 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [currentTime, setCurrentTime] = useState(0);
   const [isGeneratingPrompts, setIsGeneratingPrompts] = useState(false);
   const videoRef = useRef<VideoView>(null);
+
+  // Optimize currentTime updates with useRef to avoid re-renders
+  const timeRef = useRef(0);
 
   // Reset manual pause when video becomes inactive
   useEffect(() => {
@@ -125,20 +133,25 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     }
   }, [video.subjectId]);
 
-  // Update current time when video is playing
+  // Optimize video time tracking
   useEffect(() => {
     if (!player) return;
 
     const interval = setInterval(() => {
       if (status === 'readyToPlay' && isPlaying) {
-        setCurrentTime(player.currentTime);
+        timeRef.current = player.currentTime;
+        // Only update state if coaching prompts are present
+        if (video.coachingPrompts && video.coachingPrompts.length > 0) {
+          setCurrentTime(timeRef.current);
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [player, status, isPlaying]);
+  }, [player, status, isPlaying, video.coachingPrompts]);
 
-  const handleSave = async () => {
+  // Memoize handlers
+  const handleSave = useCallback(async () => {
     if (!auth.currentUser) return;
     
     try {
@@ -153,15 +166,9 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     } catch (error) {
       console.error('Error toggling save:', error);
     }
-  };
+  }, [saved, video.id]);
 
-  const handlePlayPause = () => {
-    console.log('Manual play/pause triggered:', {
-      videoId: video.id,
-      currentlyPlaying: isPlaying,
-      manuallyPaused
-    });
-    
+  const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       player.pause();
       setManuallyPaused(true);
@@ -169,16 +176,15 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
       setManuallyPaused(false);
       player.play();
     }
-  };
+  }, [isPlaying, player]);
 
-  
-  const handleLearn = () => {
+  const handleLearn = useCallback(() => {
     setLearningPanelVisible(true);
-  };
+  }, []);
 
-  const handleCommentsPress = () => {
+  const handleCommentsPress = useCallback(() => {
     setCommentSectionVisible(true);
-  };
+  }, []);
 
   const handleQuizGenerated = (newQuiz: Quiz) => {
     setCurrentQuiz(newQuiz);
@@ -189,14 +195,12 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     setFurtherReading(recommendations);
   };
 
-  const handleGeneratePrompts = async () => {
+  const handleGeneratePrompts = useCallback(async () => {
     try {
       setIsGeneratingPrompts(true);
       await VideoService.generateCoachingPrompts(video.id);
-      // Refresh video data to get the new prompts
       const updatedVideo = await VideoService.fetchVideoById(video.id);
       if (updatedVideo) {
-        // Update the video data with new prompts
         video.coachingPrompts = updatedVideo.coachingPrompts;
       }
     } catch (error) {
@@ -204,7 +208,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     } finally {
       setIsGeneratingPrompts(false);
     }
-  };
+  }, [video.id]);
 
   return (
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
@@ -299,9 +303,9 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         </View>
       </TouchableOpacity>
 
-      <LearningPanel
+      <MemoizedLearningPanel
         visible={learningPanelVisible}
-        onClose={() => setLearningPanelVisible(false)}
+        onClose={useCallback(() => setLearningPanelVisible(false), [])}
         title={video.title}
         videoId={video.id}
         subjectId={video.subjectId}
@@ -314,15 +318,15 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         onFurtherReadingGenerated={handleFurtherReadingGenerated}
       />
 
-      <CommentSection
+      <MemoizedCommentSection
         visible={commentSectionVisible}
-        onClose={() => setCommentSectionVisible(false)}
+        onClose={useCallback(() => setCommentSectionVisible(false), [])}
         videoId={video.id}
       />
 
-      <CoachingPrompts
+      <MemoizedCoachingPrompts
         prompts={video.coachingPrompts || []}
-        currentTime={currentTime}
+        currentTime={timeRef.current}
         onGeneratePrompts={handleGeneratePrompts}
         isGenerating={isGeneratingPrompts}
       />
