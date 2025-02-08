@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FurtherReading, VideoSummary } from '../types/video';
+import { FurtherReading, VideoSummary, Video, TranscriptionSegment } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
 import { VideoService } from '../services/firebase/video';
 import { auth } from '../services/firebase/index';
@@ -15,6 +15,7 @@ interface LearningPanelProps {
   onClose: () => void;
   title: string;
   videoId: string;
+  video: Video;
   subjectId: string;
   summary?: VideoSummary;
   furtherReading?: FurtherReading[];
@@ -67,6 +68,7 @@ export default function LearningPanel({
   onClose,
   title,
   videoId,
+  video,
   subjectId,
   summary: initialSummary,
   furtherReading,
@@ -303,14 +305,30 @@ export default function LearningPanel({
           </View>
         );
       case 'completed':
-        return transcription ? (
+        if (!video.transcriptionSegments) {
+          return (
+            <View style={styles.transcriptionEmpty}>
+              <Text style={styles.transcriptionEmptyText}>No transcription segments available</Text>
+            </View>
+          );
+        }
+        return (
           <ScrollView style={styles.transcriptionContent}>
-            <Text style={styles.transcriptionText}>{transcription}</Text>
+            {video.transcriptionSegments.map((segment: TranscriptionSegment, index: number) => (
+              <TouchableOpacity 
+                key={index}
+                style={styles.transcriptionSegment}
+                onPress={() => {
+                  // TODO: Add seek functionality when video player controls are implemented
+                }}
+              >
+                <Text style={styles.timestamp}>
+                  {formatTime(segment.start)} - {formatTime(segment.end)}
+                </Text>
+                <Text style={styles.transcriptionText}>{segment.text}</Text>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
-        ) : (
-          <View style={styles.transcriptionEmpty}>
-            <Text style={styles.transcriptionEmptyText}>No transcription available</Text>
-          </View>
         );
       default:
         return (
@@ -319,6 +337,13 @@ export default function LearningPanel({
           </View>
         );
     }
+  };
+
+  // Helper function to format time in MM:SS format
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   const renderReadingContent = () => (
@@ -1046,5 +1071,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  transcriptionSegment: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  timestamp: {
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 4,
   },
 }); 

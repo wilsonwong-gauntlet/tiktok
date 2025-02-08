@@ -308,6 +308,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         onClose={useCallback(() => setLearningPanelVisible(false), [])}
         title={video.title}
         videoId={video.id}
+        video={video}
         subjectId={video.subjectId}
         summary={video.summary}
         furtherReading={furtherReading}
