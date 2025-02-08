@@ -1081,3 +1081,190 @@ export const generateCommentSummary = onCall(
     }
   },
 );
+
+interface CoachingPrompt {
+  text: string;
+  timestamp: number; // When to show the prompt (in seconds)
+  type: "reflection" | "action" | "connection";
+}
+
+interface TranscriptionSegment {
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface GenerateCoachingPromptsRequest {
+  videoId: string;
+}
+
+interface GenerateCoachingPromptsResponse {
+  success: boolean;
+  reason?: string;
+  prompts?: CoachingPrompt[];
+}
+
+export const generateCoachingPrompts = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateCoachingPromptsRequest>): Promise<GenerateCoachingPromptsResponse> => {
+    try {
+      logger.info("=== Starting generateCoachingPrompts function ===");
+      logger.info("Request data:", {
+        auth: request.auth ? {
+          uid: request.auth.uid,
+          token: request.auth.token,
+        } : null,
+        app: request.app,
+        rawRequest: request.rawRequest ? {
+          headers: request.rawRequest.headers,
+          method: request.rawRequest.method,
+        } : null,
+      });
+
+      // Check authentication
+      if (!request.auth) {
+        const error = "User must be authenticated to generate coaching prompts";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      const {videoId} = request.data;
+      if (!videoId) {
+        const error = "Missing required parameter: videoId";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      // Get video document
+      const videoDoc = await admin.firestore().collection("videos").doc(videoId).get();
+      if (!videoDoc.exists) {
+        const error = "Video not found";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      const videoData = videoDoc.data();
+      if (!videoData?.transcriptionSegments || videoData.transcriptionStatus !== "completed") {
+        const error = "Video transcription segments are not available";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        const error = "OpenAI API key is not configured";
+        logger.error(error);
+        return {
+          success: false,
+          reason: error,
+        };
+      }
+
+      // Initialize OpenAI client with the secret at runtime
+      const openai = new OpenAI({
+        apiKey: apiKey,
+      });
+
+      // Process segments in batches to generate prompts
+      const segments = videoData.transcriptionSegments as TranscriptionSegment[];
+      const prompts: CoachingPrompt[] = [];
+
+      logger.info("Processing segments for prompts generation:", {
+        segmentsCount: segments.length,
+      });
+
+      // Process every few segments to create contextual prompts
+      for (let i = 0; i < segments.length; i += 3) {
+        const contextSegments = segments.slice(i, i + 3);
+        const combinedText = contextSegments.map((s: TranscriptionSegment) => s.text).join(" ");
+        const timestamp = contextSegments[0].start;
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert educational coach. Your task is to generate engaging prompts that help students reflect on and internalize the content they're learning. 
+              Focus on creating prompts that:
+              1. Encourage critical thinking
+              2. Help connect concepts to real-world applications
+              3. Promote deeper understanding through reflection
+              4. Build connections with prior knowledge
+              
+              Generate ONE prompt based on the given context. The prompt should be concise (1-2 sentences) and directly related to the content.
+              Return ONLY the prompt text, nothing else.`,
+            },
+            {
+              role: "user",
+              content: combinedText,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 100,
+        });
+
+        const promptText = response.choices[0].message.content?.trim();
+        if (promptText) {
+          prompts.push({
+            text: promptText,
+            timestamp,
+            type: "reflection", // We could make this more dynamic based on content analysis
+          });
+        }
+      }
+
+      logger.info("Generated prompts:", {
+        promptCount: prompts.length,
+      });
+
+      // Store the prompts in Firestore
+      try {
+        await videoDoc.ref.update({
+          coachingPrompts: prompts,
+          promptsGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        logger.info("Successfully stored prompts in Firestore");
+      } catch (error) {
+        logger.error("Error storing prompts in Firestore:", error);
+        return {
+          success: false,
+          reason: "Failed to store prompts",
+        };
+      }
+
+      logger.info("=== Successfully completed generateCoachingPrompts function ===");
+      return {
+        success: true,
+        prompts,
+      };
+    } catch (error) {
+      logger.error("Unhandled error in generateCoachingPrompts:", {
+        error,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+      return {
+        success: false,
+        reason: error instanceof Error ? error.message : "An unexpected error occurred",
+      };
+    }
+  },
+);

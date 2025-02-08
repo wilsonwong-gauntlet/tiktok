@@ -23,6 +23,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+interface WhisperResponse {
+  text: string;
+  segments: Array<{
+    text: string;
+    start: number;
+    end: number;
+  }>;
+}
+
+interface TranscriptionSegment {
+  text: string;
+  start: number;  // Start time in seconds
+  end: number;    // End time in seconds
+}
+
 export class TranscriptionService {
   static async downloadVideo(url: string): Promise<Buffer> {
     // Check if it's a Firebase Storage URL
@@ -84,20 +99,33 @@ export class TranscriptionService {
     });
   }
 
-  static async transcribeAudio(audioBuffer: Buffer): Promise<string> {
+  static async transcribeAudio(audioBuffer: Buffer): Promise<{ text: string, segments: TranscriptionSegment[] }> {
     try {
       // Create a temporary file for the audio
       const tempPath = join(tempDir, `audio-${Date.now()}.mp3`);
       require('fs').writeFileSync(tempPath, audioBuffer);
+      
       const transcription = await openai.audio.transcriptions.create({
         file: require('fs').createReadStream(tempPath),
         model: 'whisper-1',
         language: 'en',
-        response_format: 'text'
-      });
+        response_format: 'verbose_json'  // Get detailed response with timestamps
+      }) as unknown as WhisperResponse;  // Type assertion since OpenAI types don't include verbose_json format
+      
       // Clean up
       require('fs').unlinkSync(tempPath);
-      return transcription;
+      
+      // Extract segments from the response
+      const segments = transcription.segments.map(segment => ({
+        text: segment.text,
+        start: segment.start,
+        end: segment.end
+      }));
+      
+      return {
+        text: transcription.text,
+        segments
+      };
     } catch (error) {
       console.error('Error transcribing audio:', error);
       throw error;
@@ -114,17 +142,19 @@ export class TranscriptionService {
       
       // Transcribe audio
       console.log('Transcribing audio...');
-      const transcription = await this.transcribeAudio(audioBuffer);
+      const { text: transcription, segments } = await this.transcribeAudio(audioBuffer);
       
-      // Update video document with transcription
+      // Update video document with transcription and segments
       console.log('Updating video document...');
       await db.collection('videos').doc(videoId).update({
         transcription,
+        transcriptionSegments: segments,
         transcriptionStatus: 'completed',
         transcriptionUpdatedAt: new Date()
       });
+      
       console.log('Transcription process completed successfully');
-      return transcription;
+      return { transcription, segments };
     } catch (error: any) {
       console.error('Error processing video:', error);
       

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,8 @@ import { useVideoSave } from '../contexts/VideoSaveContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, usePathname } from 'expo-router';
 import { SubjectService } from '../services/firebase/subjects';
+import { VideoService } from '../services/firebase/video';
+import CoachingPrompts from './CoachingPrompts';
 
 interface VideoCardProps {
   video: VideoType;
@@ -34,6 +36,9 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const pathname = usePathname();
   const [currentQuiz, setCurrentQuiz] = useState(video.quiz);
   const [furtherReading, setFurtherReading] = useState(video.furtherReading);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isGeneratingPrompts, setIsGeneratingPrompts] = useState(false);
+  const videoRef = useRef<VideoView>(null);
 
   // Reset manual pause when video becomes inactive
   useEffect(() => {
@@ -120,6 +125,19 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     }
   }, [video.subjectId]);
 
+  // Update current time when video is playing
+  useEffect(() => {
+    if (!player) return;
+
+    const interval = setInterval(() => {
+      if (status === 'readyToPlay' && isPlaying) {
+        setCurrentTime(player.currentTime);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [player, status, isPlaying]);
+
   const handleSave = async () => {
     if (!auth.currentUser) return;
     
@@ -171,6 +189,23 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     setFurtherReading(recommendations);
   };
 
+  const handleGeneratePrompts = async () => {
+    try {
+      setIsGeneratingPrompts(true);
+      await VideoService.generateCoachingPrompts(video.id);
+      // Refresh video data to get the new prompts
+      const updatedVideo = await VideoService.fetchVideoById(video.id);
+      if (updatedVideo) {
+        // Update the video data with new prompts
+        video.coachingPrompts = updatedVideo.coachingPrompts;
+      }
+    } catch (error) {
+      console.error('Error generating prompts:', error);
+    } finally {
+      setIsGeneratingPrompts(false);
+    }
+  };
+
   return (
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
@@ -179,6 +214,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         activeOpacity={1}
       >
         <VideoView
+          ref={videoRef}
           style={styles.video}
           player={player}
           contentFit="cover"
@@ -282,6 +318,13 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         visible={commentSectionVisible}
         onClose={() => setCommentSectionVisible(false)}
         videoId={video.id}
+      />
+
+      <CoachingPrompts
+        prompts={video.coachingPrompts || []}
+        currentTime={currentTime}
+        onGeneratePrompts={handleGeneratePrompts}
+        isGenerating={isGeneratingPrompts}
       />
     </View>
   );

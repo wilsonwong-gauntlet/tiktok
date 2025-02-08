@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
-import { Video, FurtherReading, VideoSummary, Quiz } from '../../types/video';
+import { Video, FurtherReading, VideoSummary, Quiz, CoachingPrompt } from '../../types/video';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const VIDEOS_PER_PAGE = 10;
@@ -652,6 +652,27 @@ export class VideoService {
       return quiz;
     } catch (error) {
       console.error('Error generating quiz:', error);
+      throw error;
+    }
+  }
+
+  static async generateCoachingPrompts(videoId: string): Promise<CoachingPrompt[]> {
+    try {
+      const functions = getFunctions();
+      const generatePrompts = httpsCallable<
+        { videoId: string },
+        { success: boolean; reason?: string; prompts?: CoachingPrompt[] }
+      >(functions, 'generateCoachingPrompts');
+      
+      const result = await generatePrompts({ videoId });
+      
+      if (!result.data.success) {
+        throw new Error(result.data.reason || 'Failed to generate coaching prompts');
+      }
+      
+      return result.data.prompts || [];
+    } catch (error) {
+      console.error('Error generating coaching prompts:', error);
       throw error;
     }
   }

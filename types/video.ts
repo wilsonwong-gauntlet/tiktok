@@ -46,6 +46,18 @@ export interface VideoSummary {
   transcription?: string;  // Add transcription to summary
 }
 
+export interface TranscriptionSegment {
+  text: string;
+  start: number;  // Start time in seconds
+  end: number;    // End time in seconds
+}
+
+export interface CoachingPrompt {
+  text: string;
+  timestamp: number;  // When to show the prompt (in seconds)
+  type: 'reflection' | 'action' | 'connection';
+}
+
 export interface Video {
   id: string;
   title: string;
@@ -60,11 +72,6 @@ export interface Video {
   conceptIds: string[];
   relatedSubjects?: string[];
   
-  // Learning Materials
-  summary?: VideoSummary;
-  furtherReading?: FurtherReading[];
-  quiz?: Quiz;
-  
   // Metadata
   tags: string[];
   searchableText: string[];
@@ -72,11 +79,18 @@ export interface Video {
   authorId: string;
   authorName: string;
   
-  // Processing Status
+  // Transcription
   transcription?: string;
-  transcriptionStatus: 'pending' | 'completed' | 'error';
+  transcriptionStatus?: 'pending' | 'completed' | 'error';
   transcriptionError?: string;
-  transcriptionUpdatedAt?: Date;
+  transcriptionSegments?: TranscriptionSegment[];
+  
+  // AI-Generated Content
+  summary?: VideoSummary;
+  furtherReading?: FurtherReading[];
+  quiz?: Quiz;
+  coachingPrompts?: CoachingPrompt[];
+  promptsGeneratedAt?: Date;
 }
 
 export interface FurtherReading {
