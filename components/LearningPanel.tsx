@@ -305,30 +305,38 @@ export default function LearningPanel({
           </View>
         );
       case 'completed':
-        if (!video.transcriptionSegments) {
+        if (video.transcriptionSegments) {
           return (
-            <View style={styles.transcriptionEmpty}>
-              <Text style={styles.transcriptionEmptyText}>No transcription segments available</Text>
-            </View>
+            <ScrollView style={styles.transcriptionContent}>
+              {video.transcriptionSegments.map((segment: TranscriptionSegment, index: number) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={styles.transcriptionSegment}
+                  onPress={() => {
+                    // TODO: Add seek functionality when video player controls are implemented
+                  }}
+                >
+                  <Text style={styles.timestamp}>
+                    {formatTime(segment.start)} - {formatTime(segment.end)}
+                  </Text>
+                  <Text style={styles.transcriptionText}>{segment.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          );
+        } else if (video.transcription) {
+          return (
+            <ScrollView style={styles.transcriptionContent}>
+              <View style={styles.plainTranscription}>
+                <Text style={styles.transcriptionText}>{video.transcription}</Text>
+              </View>
+            </ScrollView>
           );
         }
         return (
-          <ScrollView style={styles.transcriptionContent}>
-            {video.transcriptionSegments.map((segment: TranscriptionSegment, index: number) => (
-              <TouchableOpacity 
-                key={index}
-                style={styles.transcriptionSegment}
-                onPress={() => {
-                  // TODO: Add seek functionality when video player controls are implemented
-                }}
-              >
-                <Text style={styles.timestamp}>
-                  {formatTime(segment.start)} - {formatTime(segment.end)}
-                </Text>
-                <Text style={styles.transcriptionText}>{segment.text}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.transcriptionEmpty}>
+            <Text style={styles.transcriptionEmptyText}>No transcription available</Text>
+          </View>
         );
       default:
         return (
@@ -1082,5 +1090,8 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
     marginBottom: 4,
+  },
+  plainTranscription: {
+    padding: 16,
   },
 }); 
