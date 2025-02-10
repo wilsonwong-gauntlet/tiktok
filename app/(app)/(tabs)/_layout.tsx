@@ -8,10 +8,18 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#111',
-          borderTopColor: '#333',
+          borderTopColor: '#222',
+          borderTopWidth: 0.5,
+          height: 85,
+          paddingBottom: 30,
+          paddingTop: 12,
         },
-        tabBarActiveTintColor: '#fff',
+        tabBarActiveTintColor: '#1a472a',
         tabBarInactiveTintColor: '#666',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
         headerStyle: {
           backgroundColor: '#111',
         },
@@ -21,27 +29,27 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'For You',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="play-circle-outline" size={size + 2} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="subjects"
         options={{
-          title: 'Subjects',
+          title: 'Explore',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library-outline" size={size} color={color} />
+            <Ionicons name="compass-outline" size={size + 2} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="learning"
         options={{
-          title: 'My Learning',
+          title: 'Progress',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="school-outline" size={size} color={color} />
+            <Ionicons name="bar-chart-outline" size={size + 2} color={color} />
           ),
         }}
       />
@@ -50,7 +58,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person-circle-outline" size={size + 2} color={color} />
           ),
         }}
       />
