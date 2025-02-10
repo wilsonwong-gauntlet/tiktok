@@ -12,11 +12,14 @@ import {
   QueryDocumentSnapshot,
   updateDoc,
   where,
-  deleteDoc
+  deleteDoc,
+  arrayUnion,
+  Timestamp,
+  setDoc
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './index';
-import { Video, FurtherReading, VideoSummary, Quiz, CoachingPrompt } from '../../types/video';
+import { Video, FurtherReading, VideoSummary, Quiz, CoachingPrompt, UserProgress } from '../../types/video';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const VIDEOS_PER_PAGE = 10;
@@ -33,6 +36,73 @@ interface LocalVideoUpload {
   tags: string[];
   authorId: string;
   authorName: string;
+}
+
+async function updateStreak(userId: string) {
+  try {
+    console.log('🔥 Updating streak for user:', userId);
+    const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
+    const userProgressDoc = await getDoc(userProgressRef);
+    const userProgress = userProgressDoc.data() as UserProgress;
+    
+    console.log('Current user progress:', userProgress);
+    
+    const now = Timestamp.now();
+    const lastActivityTimestamp = userProgress?.streak?.lastActivityDate;
+    
+    // If this is their first activity or no streak object
+    if (!lastActivityTimestamp) {
+      console.log('First activity or no streak - initializing streak');
+      await updateDoc(userProgressRef, {
+        streak: {
+          currentStreak: 1,
+          lastActivityDate: now,
+          longestStreak: 1
+        }
+      });
+      return;
+    }
+
+    // Check if they're maintaining their streak (activity within last 24 hours)
+    const hoursSinceLastActivity = (now.toMillis() - lastActivityTimestamp.toMillis()) / (1000 * 60 * 60);
+    console.log('Hours since last activity:', hoursSinceLastActivity);
+    
+    if (hoursSinceLastActivity <= 24) {
+      // Maintain streak
+      const currentStreak = userProgress.streak.currentStreak;
+      console.log('Maintaining streak at:', currentStreak);
+      await updateDoc(userProgressRef, {
+        streak: {
+          currentStreak,
+          lastActivityDate: now,
+          longestStreak: Math.max(currentStreak, userProgress.streak.longestStreak)
+        }
+      });
+    } else if (hoursSinceLastActivity <= 48) {
+      // They're within the grace period (next day)
+      const newStreak = userProgress.streak.currentStreak + 1;
+      console.log('Within grace period - incrementing streak to:', newStreak);
+      await updateDoc(userProgressRef, {
+        streak: {
+          currentStreak: newStreak,
+          lastActivityDate: now,
+          longestStreak: Math.max(newStreak, userProgress.streak.longestStreak)
+        }
+      });
+    } else {
+      // Streak broken
+      console.log('Streak broken - resetting to 1');
+      await updateDoc(userProgressRef, {
+        streak: {
+          currentStreak: 1,
+          lastActivityDate: now,
+          longestStreak: userProgress.streak.longestStreak
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error updating streak:', error);
+  }
 }
 
 export class VideoService {
@@ -673,6 +743,82 @@ export class VideoService {
       return result.data.prompts || [];
     } catch (error) {
       console.error('Error generating coaching prompts:', error);
+      throw error;
+    }
+  }
+
+  static async markVideoCompleted(userId: string, videoId: string, subjectId: string) {
+    try {
+      console.log('📹 Marking video as completed:', { userId, videoId, subjectId });
+      const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
+      const userProgressDoc = await getDoc(userProgressRef);
+      
+      // Initialize user progress if it doesn't exist
+      if (!userProgressDoc.exists()) {
+        console.log('Creating new user progress document');
+        const now = Timestamp.now();
+        const initialProgress = {
+          userId,
+          subjects: {
+            [subjectId]: {
+              progress: 0,
+              lastActivity: now,
+              completedVideos: [videoId],
+              masteredConcepts: [],
+              quizScores: {},
+              reflections: []
+            }
+          },
+          streak: {
+            currentStreak: 1,
+            lastActivityDate: now,
+            longestStreak: 1
+          },
+          totalStudyTime: 0,
+          weeklyGoals: {
+            target: 10,
+            achieved: 0
+          }
+        };
+        await setDoc(userProgressRef, initialProgress);
+        console.log('Created initial progress:', initialProgress);
+        return;
+      }
+
+      const userProgress = userProgressDoc.data() as UserProgress;
+      console.log('Existing user progress:', userProgress);
+
+      // Initialize subject if it doesn't exist
+      if (!userProgress.subjects[subjectId]) {
+        console.log('Initializing new subject:', subjectId);
+        userProgress.subjects[subjectId] = {
+          progress: 0,
+          lastActivity: Timestamp.now(),
+          completedVideos: [],
+          masteredConcepts: [],
+          quizScores: {},
+          reflections: []
+        };
+      }
+
+      // Add video to completed videos if not already there
+      if (!userProgress.subjects[subjectId].completedVideos.includes(videoId)) {
+        console.log('Adding video to completed videos');
+        // Update subject data
+        await updateDoc(userProgressRef, {
+          [`subjects.${subjectId}.completedVideos`]: arrayUnion(videoId),
+          [`subjects.${subjectId}.lastActivity`]: serverTimestamp()
+        });
+        console.log('Updated completed videos');
+
+        // Update streak in a separate operation to ensure atomic update
+        await updateStreak(userId);
+        console.log('Updated streak');
+      } else {
+        console.log('Video already marked as completed');
+      }
+    } catch (error) {
+      console.error('Error marking video as completed:', error);
       throw error;
     }
   }

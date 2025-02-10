@@ -19,18 +19,21 @@ interface VideoCardProps {
   isActive: boolean;
   containerHeight?: number;
   isModal?: boolean;
+  onVideoComplete?: () => void;
 }
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 49; // Standard tab bar height
 const SCREEN_HEIGHT = WINDOW_HEIGHT - TAB_BAR_HEIGHT;
 
+const COMPLETION_THRESHOLD = 0.9; // Mark video as complete when 90% watched
+
 // Memoize child components
 const MemoizedCoachingPrompts = memo(CoachingPrompts);
 const MemoizedLearningPanel = memo(LearningPanel);
 const MemoizedCommentSection = memo(CommentSection);
 
-export default function VideoCard({ video, isActive, containerHeight, isModal = false }: VideoCardProps) {
+export default function VideoCard({ video, isActive, containerHeight, isModal = false, onVideoComplete }: VideoCardProps) {
   const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState(false);
   const [learningPanelVisible, setLearningPanelVisible] = useState(false);
@@ -149,6 +152,49 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
 
     return () => clearInterval(interval);
   }, [player, status, isPlaying, video.coachingPrompts]);
+
+  // Track video completion
+  useEffect(() => {
+    if (!player || !auth.currentUser || !video.subjectId) return;
+
+    const interval = setInterval(() => {
+      if (status === 'readyToPlay' && isPlaying) {
+        const progress = player.currentTime / player.duration;
+        console.log('Video progress:', {
+          currentTime: player.currentTime,
+          duration: player.duration,
+          progress: progress,
+          threshold: COMPLETION_THRESHOLD
+        });
+        
+        // Mark video as completed when user watches 90% or reaches the end
+        if (progress >= COMPLETION_THRESHOLD) {
+          console.log('Video reached completion threshold');
+          const currentUser = auth.currentUser;
+          if (!currentUser) {
+            console.error('User not authenticated');
+            return;
+          }
+          
+          VideoService.markVideoCompleted(currentUser.uid, video.id, video.subjectId)
+            .then(() => {
+              console.log('Successfully marked video as completed');
+              // Call the onVideoComplete callback if provided
+              onVideoComplete?.();
+              // Also refresh the learning data if the function exists
+              if (typeof window !== 'undefined' && (window as any).refreshLearningData) {
+                (window as any).refreshLearningData();
+              }
+            })
+            .catch(error => console.error('Error marking video as completed:', error));
+          // Clear interval after marking complete
+          clearInterval(interval);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [player, status, isPlaying, video.id, video.subjectId, onVideoComplete]);
 
   // Memoize handlers
   const handleSave = useCallback(async () => {

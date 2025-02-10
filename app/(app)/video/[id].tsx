@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Video } from '../../../types/video';
@@ -42,6 +42,12 @@ export default function VideoViewer() {
   const handleDismiss = () => {
     router.back();
   };
+
+  const handleVideoComplete = useCallback(() => {
+    console.log('Video completed in modal view');
+    // Refresh the video data to update any UI that depends on completion status
+    loadVideo();
+  }, []);
 
   const panGesture = Gesture.Pan()
     .onChange((event) => {
@@ -87,6 +93,7 @@ export default function VideoViewer() {
           isActive={true}
           isModal={true}
           containerHeight={WINDOW_HEIGHT}
+          onVideoComplete={handleVideoComplete}
         />
       </Animated.View>
     </GestureDetector>

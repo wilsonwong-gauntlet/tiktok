@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Dimensions, ActivityIndicator, Text, TouchableOpacity, ViewToken } from 'react-native';
 import { Video, VideoFeed } from '../../../types/video';
 import { VideoService } from '../../../services/firebase/video';
@@ -87,6 +87,12 @@ export default function Home() {
     }
   };
 
+  const handleVideoComplete = useCallback(() => {
+    console.log('Video completed in home feed');
+    // Refresh the feed to update any UI that depends on completion status
+    loadVideos();
+  }, []);
+
   const onViewableItemsChanged = React.useCallback(({ 
     viewableItems 
   }: {
@@ -109,7 +115,11 @@ export default function Home() {
 
   const renderVideo = ({ item, index }: { item: Video; index: number }) => (
     <View style={[styles.videoContainer, { height: SCREEN_HEIGHT }]}>
-      <VideoCard video={item} isActive={index === currentIndex} />
+      <VideoCard 
+        video={item} 
+        isActive={index === currentIndex} 
+        onVideoComplete={handleVideoComplete}
+      />
     </View>
   );
 

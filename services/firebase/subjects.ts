@@ -12,7 +12,6 @@ import { db } from './index';
 import { Subject, UserProgress, Concept } from '../../types/video';
 
 const SUBJECTS_COLLECTION = 'subjects';
-const USER_PROGRESS_COLLECTION = 'userProgress';
 
 export class SubjectService {
   static async getSubjects(userId: string): Promise<Subject[]> {
@@ -31,11 +30,11 @@ export class SubjectService {
       })) as Subject[];
       console.log('Mapped subjects:', subjects);
 
-      // Get user progress
-      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
-      console.log('Fetching user progress from:', USER_PROGRESS_COLLECTION);
+      // Get user progress from new path
+      const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
+      console.log('Fetching user progress from new path');
       const userProgressDoc = await getDoc(userProgressRef);
-      const userProgress = userProgressDoc.data() as UserProgress;
+      const userProgress = userProgressDoc.exists() ? userProgressDoc.data() as UserProgress : null;
       console.log('User progress:', userProgress);
 
       // Merge subject data with user progress
@@ -88,10 +87,10 @@ export class SubjectService {
         progress: 0
       } as Subject;
 
-      // Get user progress for this subject
-      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      // Get user progress from new path
+      const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
       const userProgressDoc = await getDoc(userProgressRef);
-      const userProgress = userProgressDoc.data() as UserProgress;
+      const userProgress = userProgressDoc.exists() ? userProgressDoc.data() as UserProgress : null;
 
       // Merge with user progress
       if (userProgress?.subjects[subjectId]) {
@@ -133,10 +132,10 @@ export class SubjectService {
         ...doc.data()
       })) as Subject[];
 
-      // Get user progress
-      const userProgressRef = doc(db, USER_PROGRESS_COLLECTION, userId);
+      // Get user progress from new path
+      const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
       const userProgressDoc = await getDoc(userProgressRef);
-      const userProgress = userProgressDoc.data() as UserProgress;
+      const userProgress = userProgressDoc.exists() ? userProgressDoc.data() as UserProgress : null;
 
       // Merge subject data with user progress
       return subjects.map(subject => ({
@@ -152,7 +151,7 @@ export class SubjectService {
 
   static async getUserProgress(userId: string): Promise<UserProgress | null> {
     try {
-      const progressRef = doc(db, 'userProgress', userId);
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
       const progressDoc = await getDoc(progressRef);
       
       if (progressDoc.exists()) {
@@ -167,7 +166,7 @@ export class SubjectService {
 
   static async getActiveSubjects(userId: string): Promise<Subject[]> {
     try {
-      const progressRef = doc(db, 'userProgress', userId);
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
       const progressDoc = await getDoc(progressRef);
       
       if (progressDoc.exists()) {

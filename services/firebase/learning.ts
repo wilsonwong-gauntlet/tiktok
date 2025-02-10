@@ -20,7 +20,7 @@ interface UserProgress {
   subjects: {
     [subjectId: string]: {
       progress: number;
-      lastActivity: Date;
+      lastActivity: Timestamp;
       completedVideos: string[];
       masteredConcepts: string[];
       quizScores: {
@@ -29,7 +29,11 @@ interface UserProgress {
       reflections: string[];
     };
   };
-  learningStreak: number;
+  streak: {
+    currentStreak: number;
+    lastActivityDate: Timestamp;
+    longestStreak: number;
+  };
   totalStudyTime: number;
   weeklyGoals: {
     target: number;
@@ -132,7 +136,7 @@ export async function saveQuizAttempt(
     );
 
     // Get or create user progress document
-    const userProgressRef = doc(db, 'userProgress', userId);
+    const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
     const userProgressDoc = await getDoc(userProgressRef);
     
     let userProgress: UserProgress;
@@ -142,7 +146,11 @@ export async function saveQuizAttempt(
       userProgress = {
         userId,
         subjects: {},
-        learningStreak: 0,
+        streak: {
+          currentStreak: 0,
+          lastActivityDate: Timestamp.fromDate(new Date()),
+          longestStreak: 0
+        },
         totalStudyTime: 0,
         weeklyGoals: {
           target: 10,
@@ -155,7 +163,7 @@ export async function saveQuizAttempt(
     if (!userProgress.subjects[subjectId]) {
       userProgress.subjects[subjectId] = {
         progress: 0,
-        lastActivity: new Date(),
+        lastActivity: Timestamp.fromDate(new Date()),
         completedVideos: [],
         masteredConcepts: [],
         quizScores: {},
@@ -165,7 +173,7 @@ export async function saveQuizAttempt(
 
     // Update quiz scores and last activity
     userProgress.subjects[subjectId].quizScores[quizId] = score;
-    userProgress.subjects[subjectId].lastActivity = new Date();
+    userProgress.subjects[subjectId].lastActivity = Timestamp.fromDate(new Date());
 
     // Add video to completed videos if not already there
     if (!userProgress.subjects[subjectId].completedVideos.includes(videoId)) {

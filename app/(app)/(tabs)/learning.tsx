@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,6 +79,24 @@ export default function LearningScreen() {
   useEffect(() => {
     loadUserData();
   }, []);
+
+  // Add a refresh function that can be called from other components
+  const refreshLearningData = useCallback(() => {
+    console.log('Refreshing learning data...');
+    loadUserData();
+  }, []);
+
+  // Export the refresh function to make it available to other components
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).refreshLearningData = refreshLearningData;
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).refreshLearningData;
+      }
+    };
+  }, [refreshLearningData]);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -315,6 +333,20 @@ export default function LearningScreen() {
 
   const renderOverviewTab = () => (
     <ScrollView style={styles.scrollView}>
+      <TouchableOpacity style={styles.streakBanner}>
+        <View style={styles.streakContent}>
+          <Ionicons name="flame" size={28} color="#ff9500" />
+          <View>
+            <Text style={styles.streakCount}>
+              {userProgress?.streak?.currentStreak || 0} day streak!
+            </Text>
+            {(userProgress?.streak?.currentStreak || 0) >= 7 && (
+              <Text style={styles.streakSubtext}>You're on fire! 🔥</Text>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Active Subjects</Text>
         {activeSubjects.length > 0 ? (
@@ -570,5 +602,28 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     backgroundColor: '#1a472a',
+  },
+  streakBanner: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+  },
+  streakContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  streakCount: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  streakSubtext: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 2,
   },
 }); 

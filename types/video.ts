@@ -213,7 +213,7 @@ export interface UserProgress {
   subjects: {
     [subjectId: string]: {
       progress: number;
-      lastActivity: Date;
+      lastActivity: Timestamp;
       completedVideos: string[];
       masteredConcepts: string[];
       quizScores: {
@@ -222,7 +222,11 @@ export interface UserProgress {
       reflections: Reflection[];
     }
   };
-  learningStreak: number;
+  streak: {
+    currentStreak: number;
+    lastActivityDate: Timestamp;
+    longestStreak: number;
+  };
   totalStudyTime: number;
   weeklyGoals: {
     target: number;
