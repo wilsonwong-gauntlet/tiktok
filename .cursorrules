@@ -1,24 +1,9 @@
-Use firebase web app sdk.
+1. **Firebase Web SDK**  
+     ```ts
+     import { initializeApp } from 'firebase/app'
+     ```
 
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCA5xFRAu19FpUTFgXxzWWnyZ3_ZqOYpRs",
-  authDomain: "tiktok-3142f.firebaseapp.com",
-  projectId: "tiktok-3142f",
-  storageBucket: "tiktok-3142f.firebasestorage.app",
-  messagingSenderId: "733898101817",
-  appId: "1:733898101817:web:2f28459bd9f0fb726d69e8"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-
-[expo-av]: Video component from `expo-av` is deprecated in favor of `expo-video`. See the documentation at https://docs.expo.dev/versions/latest/sdk/video/ for the new API reference.
-
-[expo-video]: Use the `Video` component from `expo-video` instead of `expo-av`.
+2. **Video Playback**  
+   - Use `expo-video` instead of `expo-av`.  
+   - “[expo-av]: Video component from `expo-av` is deprecated in favor of `expo-video`.”  
+   - Reference [expo-video docs](https://docs.expo.dev/versions/latest/sdk/video/) for the new API.

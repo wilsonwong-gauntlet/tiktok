@@ -327,18 +327,22 @@ export default function LearningScreen() {
               >
                 <View style={styles.subjectHeader}>
                   <Text style={styles.subjectTitle}>{subject.name}</Text>
-                  <Text style={styles.subjectProgress}>
-                    {subject.progress}%
-                  </Text>
                 </View>
-                {renderProgressBar(subject.progress)}
                 <View style={styles.subjectStats}>
-                  <Text style={styles.subjectStat}>
-                    {subject.completedVideos}/{subject.videosCount} videos
-                  </Text>
-                  <Text style={styles.subjectStat}>
-                    {subject.concepts.filter(c => c.status === 'mastered').length} concepts mastered
-                  </Text>
+                  <View style={styles.statItem}>
+                    <Ionicons name="play-circle" size={16} color="#1a472a" />
+                    <Text style={styles.subjectStat}>
+                      {subject.completedVideos} videos
+                    </Text>
+                  </View>
+                  {userProgress?.subjects[subject.id]?.quizScores && (
+                    <View style={styles.statItem}>
+                      <Ionicons name="school" size={16} color="#1a472a" />
+                      <Text style={styles.subjectStat}>
+                        {Object.keys(userProgress.subjects[subject.id].quizScores).length} quizzes
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
             ))}
@@ -356,37 +360,6 @@ export default function LearningScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <View style={styles.activityList}>
-          {userProgress && Object.entries(userProgress.subjects).map(([subjectId, data]) => {
-            const subject = activeSubjects.find(s => s.id === subjectId);
-            if (!subject) return null;
-
-            return (
-              <TouchableOpacity 
-                key={subjectId}
-                style={styles.activityCard}
-                onPress={() => router.push(`/subject/${subjectId}`)}
-              >
-                <View style={styles.activityIcon}>
-                  <Ionicons name="play-circle" size={24} color="#1a472a" />
-                </View>
-                <View style={styles.activityInfo}>
-                  <Text style={styles.activityTitle}>
-                    Watched video in {subject.name}
-                  </Text>
-                  <Text style={styles.activityTime}>
-                    {new Date(data.lastActivity).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#666" />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
       </View>
     </ScrollView>
   );
@@ -437,6 +410,14 @@ export default function LearningScreen() {
         return null;
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1a472a" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -537,50 +518,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  subjectProgress: {
+  subjectStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  subjectStat: {
     fontSize: 14,
     color: '#1a472a',
     fontWeight: '600',
-  },
-  subjectStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  subjectStat: {
-    fontSize: 12,
-    color: '#666',
-  },
-  activityList: {
-    gap: 8,
-  },
-  activityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#222',
-    padding: 12,
-    borderRadius: 10,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(26, 71, 42, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  activityInfo: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 14,
-    color: '#fff',
-    marginBottom: 4,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#666',
   },
   placeholder: {
     backgroundColor: '#222',
@@ -608,17 +559,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  comingSoon: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  comingSoonText: {
-    color: '#666',
-    fontSize: 16,
-    marginTop: 16,
   },
   progressBarContainer: {
     height: 4,
