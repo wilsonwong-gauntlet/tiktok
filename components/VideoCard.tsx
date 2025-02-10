@@ -13,6 +13,7 @@ import { router, usePathname } from 'expo-router';
 import { SubjectService } from '../services/firebase/subjects';
 import { VideoService } from '../services/firebase/video';
 import CoachingPrompts from './CoachingPrompts';
+import Slider from '@react-native-community/slider';
 
 interface VideoCardProps {
   video: VideoType;
@@ -33,6 +34,61 @@ const MemoizedCoachingPrompts = memo(CoachingPrompts);
 const MemoizedLearningPanel = memo(LearningPanel);
 const MemoizedCommentSection = memo(CommentSection);
 
+const VideoProgressBar = memo(({ currentTime, duration, onSeek, isActive }: {
+  currentTime: number;
+  duration: number;
+  onSeek: (time: number) => void;
+  isActive: boolean;
+}) => {
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPosition, setScrubPosition] = useState(0);
+  const insets = useSafeAreaInsets();
+
+  if (!isActive) return null;
+
+  return (
+    <View style={[
+      styles.progressContainer,
+      { paddingBottom: Math.max(16, insets.bottom + 8) }
+    ]}>
+      <Slider
+        style={styles.slider}
+        value={isScrubbing ? scrubPosition : currentTime}
+        minimumValue={0}
+        maximumValue={duration}
+        minimumTrackTintColor="#1a472a"
+        maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+        thumbTintColor="#1a472a"
+        onSlidingStart={(value: number) => {
+          setIsScrubbing(true);
+          setScrubPosition(value);
+        }}
+        onValueChange={(value: number) => {
+          setScrubPosition(value);
+        }}
+        onSlidingComplete={(value: number) => {
+          setIsScrubbing(false);
+          onSeek(value);
+        }}
+      />
+      <View style={styles.timeContainer}>
+        <Text style={styles.timeText}>
+          {formatTime(isScrubbing ? scrubPosition : currentTime)}
+        </Text>
+        <Text style={styles.timeText}>
+          {formatTime(duration)}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+const formatTime = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
 export default function VideoCard({ video, isActive, containerHeight, isModal = false, onVideoComplete }: VideoCardProps) {
   const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState(false);
@@ -47,6 +103,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [currentTime, setCurrentTime] = useState(0);
   const [isGeneratingPrompts, setIsGeneratingPrompts] = useState(false);
   const videoRef = useRef<VideoView>(null);
+  const [duration, setDuration] = useState(0);
 
   // Optimize currentTime updates with useRef to avoid re-renders
   const timeRef = useRef(0);
@@ -136,22 +193,27 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     }
   }, [video.subjectId]);
 
-  // Optimize video time tracking
+  // Add duration tracking
+  useEffect(() => {
+    if (player && status === 'readyToPlay') {
+      setDuration(player.duration);
+    }
+  }, [player, status]);
+
+  // Optimize video time tracking with duration
   useEffect(() => {
     if (!player) return;
 
     const interval = setInterval(() => {
       if (status === 'readyToPlay' && isPlaying) {
-        timeRef.current = player.currentTime;
-        // Only update state if coaching prompts are present
-        if (video.coachingPrompts && video.coachingPrompts.length > 0) {
-          setCurrentTime(timeRef.current);
-        }
+        const time = player.currentTime;
+        timeRef.current = time;
+        setCurrentTime(time);
       }
-    }, 1000);
+    }, 250); // Update more frequently for smoother progress
 
     return () => clearInterval(interval);
-  }, [player, status, isPlaying, video.coachingPrompts]);
+  }, [player, status, isPlaying]);
 
   // Track video completion
   useEffect(() => {
@@ -256,6 +318,20 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     }
   }, [video.id]);
 
+  const handleSeek = useCallback((time: number) => {
+    if (player && status === 'readyToPlay') {
+      // Ensure time is within valid bounds
+      const boundedTime = Math.max(0, Math.min(time, player.duration));
+      const seekAmount = boundedTime - player.currentTime;
+      
+      // Only seek if the change is significant enough (more than 0.5 seconds)
+      if (Math.abs(seekAmount) > 0.5) {
+        player.seekBy(seekAmount);
+        setCurrentTime(boundedTime);
+      }
+    }
+  }, [player, status]);
+
   return (
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
@@ -265,7 +341,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
       >
         <VideoView
           ref={videoRef}
-          style={styles.video}
+          style={[styles.video, { height: containerHeight || SCREEN_HEIGHT }]}
           player={player}
           contentFit="cover"
           allowsFullscreen={false}
@@ -377,6 +453,13 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         onGeneratePrompts={handleGeneratePrompts}
         isGenerating={isGeneratingPrompts}
       />
+
+      <VideoProgressBar
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={handleSeek}
+        isActive={isActive}
+      />
     </View>
   );
 }
@@ -402,6 +485,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingBottom: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   rightActions: {
     position: 'absolute',
@@ -426,7 +510,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingRight: 80,
-    marginBottom: 16,
+    marginBottom: 80,
   },
   title: {
     color: '#fff',
@@ -499,5 +583,29 @@ const styles = StyleSheet.create({
   conceptText: {
     color: '#fff',
     fontSize: 12,
+  },
+  progressContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  slider: {
+    width: '100%',
+    height: 32,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  timeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
 }); 

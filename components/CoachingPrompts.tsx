@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { CoachingPrompt } from '../types/video';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface CoachingPromptsProps {
   prompts: CoachingPrompt[];
@@ -18,44 +19,63 @@ export default function CoachingPrompts({
 }: CoachingPromptsProps) {
   const [currentPrompt, setCurrentPrompt] = useState<CoachingPrompt | null>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [isDismissed, setIsDismissed] = useState(false);
+  const dismissTimeout = useRef<NodeJS.Timeout>();
+
+  // Simplified timing constants
+  const PROMPT_WINDOW = 3; // Show prompts within 3 seconds of timestamp
+  const ANIMATION_DURATION = 1000; // 1 second for all animations
+  const VISIBILITY_DURATION = 5000; // Show for 5 seconds
 
   useEffect(() => {
-    // Reset dismissed state when time changes significantly
-    setIsDismissed(false);
-  }, [Math.floor(currentTime / 30)]); // Reset every 30 seconds
-
-  useEffect(() => {
-    if (isDismissed) return;
-
-    // Find the most relevant prompt for the current time
-    const relevantPrompt = prompts.find(prompt => {
+    // Find prompt that matches current time
+    const activePrompt = prompts.find(prompt => {
       const timeDiff = Math.abs(prompt.timestamp - currentTime);
-      // Show prompt if we're within 2 seconds of its timestamp
-      return timeDiff <= 2;
+      return timeDiff <= PROMPT_WINDOW;
     });
 
-    if (relevantPrompt !== currentPrompt) {
-      if (relevantPrompt) {
-        setCurrentPrompt(relevantPrompt);
-        // Fade in
+    // Handle prompt changes
+    if (activePrompt !== currentPrompt) {
+      // Clear any existing timeout
+      if (dismissTimeout.current) {
+        clearTimeout(dismissTimeout.current);
+      }
+
+      if (activePrompt) {
+        // Show new prompt
+        setCurrentPrompt(activePrompt);
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 500,
+          duration: ANIMATION_DURATION,
+          easing: Easing.bezier(0.4, 0, 0.2, 1),
           useNativeDriver: true,
         }).start();
+
+        // Set dismiss timeout
+        dismissTimeout.current = setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: ANIMATION_DURATION,
+            easing: Easing.bezier(0.4, 0, 0.2, 1),
+            useNativeDriver: true,
+          }).start(() => setCurrentPrompt(null));
+        }, VISIBILITY_DURATION);
       } else {
-        // Fade out
+        // Fade out current prompt
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 500,
+          duration: ANIMATION_DURATION,
+          easing: Easing.bezier(0.4, 0, 0.2, 1),
           useNativeDriver: true,
-        }).start(() => {
-          setCurrentPrompt(null);
-        });
+        }).start(() => setCurrentPrompt(null));
       }
     }
-  }, [currentTime, prompts, isDismissed]);
+
+    return () => {
+      if (dismissTimeout.current) {
+        clearTimeout(dismissTimeout.current);
+      }
+    };
+  }, [currentTime, prompts]);
 
   if (isGenerating) {
     return (
@@ -80,7 +100,7 @@ export default function CoachingPrompts({
     );
   }
 
-  if (!currentPrompt || isDismissed) return null;
+  if (!currentPrompt) return null;
 
   return (
     <Animated.View 
@@ -91,32 +111,34 @@ export default function CoachingPrompts({
           transform: [{
             translateY: fadeAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [50, 0],
+              outputRange: [-20, 0],
+              extrapolate: 'clamp',
             }),
           }],
         },
       ]}
     >
-      <View style={styles.promptContainer}>
+      <LinearGradient
+        colors={['rgba(0, 0, 0, 0.95)', 'rgba(0, 0, 0, 0.85)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.promptContainer}
+      >
         <View style={styles.promptContent}>
-          <Ionicons 
-            name={
-              currentPrompt.type === 'reflection' ? 'bulb-outline' :
-              currentPrompt.type === 'action' ? 'checkmark-circle-outline' :
-              'git-branch-outline'  // for 'connection' type
-            } 
-            size={24} 
-            color="#fff" 
-          />
+          <View style={styles.iconContainer}>
+            <Ionicons 
+              name={
+                currentPrompt.type === 'reflection' ? 'bulb-outline' :
+                currentPrompt.type === 'action' ? 'checkmark-circle-outline' :
+                'git-branch-outline'
+              } 
+              size={20}
+              color="#fff" 
+            />
+          </View>
           <Text style={styles.promptText}>{currentPrompt.text}</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.dismissButton}
-          onPress={() => setIsDismissed(true)}
-        >
-          <Ionicons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -124,62 +146,89 @@ export default function CoachingPrompts({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 80,
-    left: 0,
-    right: 0,
-    padding: 16,
+    top: 60,
+    left: 16,
+    right: 16,
     zIndex: 1000,
   },
   promptContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   promptContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#fff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   promptText: {
     color: '#fff',
-    fontSize: 16,
-    marginLeft: 12,
+    fontSize: 15,
     flex: 1,
-  },
-  dismissButton: {
-    padding: 4,
+    lineHeight: 20,
+    fontWeight: '400',
+    letterSpacing: 0.2,
   },
   generateButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    padding: 14,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   generateButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   loadingContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   loadingText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '400',
+    letterSpacing: 0.2,
   },
 }); 
