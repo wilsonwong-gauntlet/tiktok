@@ -154,6 +154,7 @@ export default function SubjectDetailScreen() {
   const [expandedQuizzes, setExpandedQuizzes] = useState<Set<string>>(new Set());
   const [quizAttempts, setQuizAttempts] = useState<Record<string, QuizAttempt | null>>({});
   const [expandedReadingRows, setExpandedReadingRows] = useState<Set<string>>(new Set());
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -535,28 +536,10 @@ export default function SubjectDetailScreen() {
     <View>
       <Text style={styles.description}>{subject?.description}</Text>
       
-      <View style={styles.progressSection}>
-        {renderProgressBar(subject?.progress || 0)}
-        <Text style={styles.progressText}>{subject?.progress}% Complete</Text>
-        <Text style={styles.statsText}>
-          {subject?.completedVideos} / {subject?.videosCount} videos watched
-        </Text>
-      </View>
-
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{videos.length}</Text>
           <Text style={styles.statLabel}>Total Videos</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{subject?.concepts.length}</Text>
-          <Text style={styles.statLabel}>Concepts</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            {subject?.concepts.filter(c => c.status === 'mastered').length}
-          </Text>
-          <Text style={styles.statLabel}>Mastered</Text>
         </View>
       </View>
 
@@ -930,6 +913,7 @@ export default function SubjectDetailScreen() {
                     <QuizPanel
                       quiz={quiz}
                       videoId={video.id}
+                      subjectId={id as string}
                       onComplete={async (score) => {
                         if (auth.currentUser) {
                           setQuizAttempts(prev => ({
@@ -1008,20 +992,194 @@ export default function SubjectDetailScreen() {
     );
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'overview':
-        return renderOverviewTab();
-      case 'summaries':
-        return renderSummariesTab();
-      case 'quizzes':
-        return renderQuizzesTab();
+  const renderSectionContent = () => {
+    switch (selectedSection) {
+      case 'videos':
+        return (
+          <View style={styles.sectionContent}>
+            <View style={styles.sectionContentHeader}>
+              <TouchableOpacity 
+                style={styles.backToOverview}
+                onPress={() => setSelectedSection(null)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backToOverviewText}>Back to Overview</Text>
+              </TouchableOpacity>
+            </View>
+            {renderSearchBar()}
+            {renderFilterOptions()}
+            <View style={styles.videoList}>
+              {filteredSavedVideos.length > 0 && (
+                <View style={styles.savedVideosSection}>
+                  <Text style={styles.videoSectionTitle}>Saved Videos</Text>
+                  {filteredSavedVideos.map(video => (
+                    <TouchableOpacity 
+                      key={video.id}
+                      style={[styles.videoItem, styles.savedVideoItem]}
+                      onPress={() => router.push(`/video/${video.id}`)}
+                    >
+                      <Text style={styles.videoTitle}>{video.title}</Text>
+                      <Text style={styles.videoDuration}>
+                        {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')} min
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              
+              <Text style={styles.videoSectionTitle}>All Videos</Text>
+              {filteredVideos.map(video => (
+                <TouchableOpacity 
+                  key={video.id}
+                  style={styles.videoItem}
+                  onPress={() => router.push(`/video/${video.id}`)}
+                >
+                  <Text style={styles.videoTitle}>{video.title}</Text>
+                  <Text style={styles.videoDuration}>
+                    {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')} min
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
       case 'reading':
-        return renderReadingTab();
+        return (
+          <View style={styles.sectionContent}>
+            <View style={styles.sectionContentHeader}>
+              <TouchableOpacity 
+                style={styles.backToOverview}
+                onPress={() => setSelectedSection(null)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backToOverviewText}>Back to Overview</Text>
+              </TouchableOpacity>
+            </View>
+            {renderReadingTab()}
+          </View>
+        );
+      case 'summaries':
+        return (
+          <View style={styles.sectionContent}>
+            <View style={styles.sectionContentHeader}>
+              <TouchableOpacity 
+                style={styles.backToOverview}
+                onPress={() => setSelectedSection(null)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backToOverviewText}>Back to Overview</Text>
+              </TouchableOpacity>
+            </View>
+            {renderSummariesTab()}
+          </View>
+        );
+      case 'quizzes':
+        return (
+          <View style={styles.sectionContent}>
+            <View style={styles.sectionContentHeader}>
+              <TouchableOpacity 
+                style={styles.backToOverview}
+                onPress={() => setSelectedSection(null)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backToOverviewText}>Back to Overview</Text>
+              </TouchableOpacity>
+            </View>
+            {renderQuizzesTab()}
+          </View>
+        );
       case 'reflections':
-        return renderReflectionsTab();
+        return (
+          <View style={styles.sectionContent}>
+            <View style={styles.sectionContentHeader}>
+              <TouchableOpacity 
+                style={styles.backToOverview}
+                onPress={() => setSelectedSection(null)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Text style={styles.backToOverviewText}>Back to Overview</Text>
+              </TouchableOpacity>
+            </View>
+            {renderReflectionsTab()}
+          </View>
+        );
       default:
-        return null;
+        return (
+          <>
+            {/* Learning Materials Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>Learning Materials</Text>
+              <View style={styles.learningGrid}>
+                <TouchableOpacity 
+                  style={styles.learningCard}
+                  onPress={() => setSelectedSection('videos')}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <Ionicons name="play-circle" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.cardTitle}>Video Lessons</Text>
+                  <Text style={styles.cardSubtext}>{videos.length} videos</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.learningCard}
+                  onPress={() => setSelectedSection('reading')}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <Ionicons name="book" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.cardTitle}>Reading Materials</Text>
+                  <Text style={styles.cardSubtext}>Additional resources</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Study Tools Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>Study Tools</Text>
+              <View style={styles.learningGrid}>
+                <TouchableOpacity 
+                  style={styles.learningCard}
+                  onPress={() => setSelectedSection('summaries')}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <Ionicons name="document-text" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.cardTitle}>Video Summaries</Text>
+                  <Text style={styles.cardSubtext}>Quick review materials</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.learningCard}
+                  onPress={() => setSelectedSection('quizzes')}
+                >
+                  <View style={styles.cardIconContainer}>
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  </View>
+                  <Text style={styles.cardTitle}>Practice Quizzes</Text>
+                  <Text style={styles.cardSubtext}>Test your knowledge</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Personal Progress Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>Your Learning Journey</Text>
+              <TouchableOpacity 
+                style={styles.reflectionCard}
+                onPress={() => setSelectedSection('reflections')}
+              >
+                <View style={styles.reflectionHeader}>
+                  <Ionicons name="journal" size={24} color="#fff" />
+                  <Text style={styles.reflectionTitle}>Learning Reflections</Text>
+                </View>
+                <Text style={styles.reflectionSubtext}>
+                  Track your understanding and insights
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        );
     }
   };
 
@@ -1060,10 +1218,13 @@ export default function SubjectDetailScreen() {
         <Text style={styles.title}>{subject.name}</Text>
       </View>
 
-      {renderTabs()}
-
       <View style={styles.content}>
-        {renderContent()}
+        {/* Introduction Section */}
+        <View style={styles.section}>
+          <Text style={styles.description}>{subject?.description}</Text>
+        </View>
+
+        {renderSectionContent()}
       </View>
     </ScrollView>
   );
@@ -1091,7 +1252,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
+    paddingBottom: 40,
   },
   description: {
     fontSize: 16,
@@ -1617,5 +1778,137 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     lineHeight: 20,
+  },
+  section: {
+    marginBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  sectionHeader: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  statsCard: {
+    backgroundColor: '#1a472a',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  statsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  statsSubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  learningGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  learningCard: {
+    flex: 1,
+    minWidth: 150,
+    backgroundColor: '#222',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'flex-start',
+  },
+  cardIconContainer: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  cardSubtext: {
+    fontSize: 14,
+    color: '#666',
+  },
+  reflectionCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    padding: 16,
+  },
+  reflectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  reflectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  reflectionSubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 36,
+  },
+  sectionContent: {
+    flex: 1,
+  },
+  sectionContentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  backToOverview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backToOverviewText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  videoList: {
+    paddingTop: 16,
+  },
+  videoItem: {
+    backgroundColor: '#222',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  videoTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  videoDuration: {
+    color: '#666',
+    fontSize: 14,
+  },
+  videoSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  savedVideosSection: {
+    marginBottom: 24,
+  },
+  savedVideoItem: {
+    borderColor: '#1a472a',
+    borderWidth: 1,
   },
 }); 
