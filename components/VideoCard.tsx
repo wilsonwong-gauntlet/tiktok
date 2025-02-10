@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { Video as VideoType, Subject, Quiz, FurtherReading } from '../types/video';
@@ -34,23 +34,65 @@ const MemoizedCoachingPrompts = memo(CoachingPrompts);
 const MemoizedLearningPanel = memo(LearningPanel);
 const MemoizedCommentSection = memo(CommentSection);
 
-const VideoProgressBar = memo(({ currentTime, duration, onSeek, isActive }: {
+const VideoProgressBar = memo(React.forwardRef(({ currentTime, duration, onSeek, isActive }: {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
   isActive: boolean;
-}) => {
+}, ref: React.ForwardedRef<{ show: () => void }>) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const hideTimeout = useRef<NodeJS.Timeout>();
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPosition, setScrubPosition] = useState(0);
   const insets = useSafeAreaInsets();
 
+  // Expose show method via ref
+  React.useImperativeHandle(ref, () => ({
+    show: () => {
+      setIsVisible(true);
+      if (hideTimeout.current) {
+        clearTimeout(hideTimeout.current);
+      }
+      hideTimeout.current = setTimeout(() => {
+        setIsVisible(false);
+      }, 3000);
+    }
+  }));
+
+  // Show controls when active and reset hide timer
+  useEffect(() => {
+    if (isActive) {
+      setIsVisible(true);
+      if (hideTimeout.current) {
+        clearTimeout(hideTimeout.current);
+      }
+      if (!isScrubbing) {
+        hideTimeout.current = setTimeout(() => {
+          setIsVisible(false);
+        }, 3000); // Hide after 3 seconds of inactivity
+      }
+    }
+    return () => {
+      if (hideTimeout.current) {
+        clearTimeout(hideTimeout.current);
+      }
+    };
+  }, [isActive, isScrubbing]);
+
   if (!isActive) return null;
 
   return (
-    <View style={[
-      styles.progressContainer,
-      { paddingBottom: Math.max(16, insets.bottom + 8) }
-    ]}>
+    <Animated.View 
+      style={[
+        styles.progressContainer,
+        {
+          opacity: isVisible || isScrubbing ? 1 : 0,
+          transform: [{
+            translateY: isVisible || isScrubbing ? 0 : 20
+          }]
+        }
+      ]}
+    >
       <Slider
         style={styles.slider}
         value={isScrubbing ? scrubPosition : currentTime}
@@ -69,6 +111,13 @@ const VideoProgressBar = memo(({ currentTime, duration, onSeek, isActive }: {
         onSlidingComplete={(value: number) => {
           setIsScrubbing(false);
           onSeek(value);
+          // Start hide timer after completing scrub
+          if (hideTimeout.current) {
+            clearTimeout(hideTimeout.current);
+          }
+          hideTimeout.current = setTimeout(() => {
+            setIsVisible(false);
+          }, 3000);
         }}
       />
       <View style={styles.timeContainer}>
@@ -79,9 +128,9 @@ const VideoProgressBar = memo(({ currentTime, duration, onSeek, isActive }: {
           {formatTime(duration)}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
-});
+}));
 
 const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -104,6 +153,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [isGeneratingPrompts, setIsGeneratingPrompts] = useState(false);
   const videoRef = useRef<VideoView>(null);
   const [duration, setDuration] = useState(0);
+  const videoProgressBarRef = useRef<{ show: () => void }>(null);
 
   // Optimize currentTime updates with useRef to avoid re-renders
   const timeRef = useRef(0);
@@ -336,7 +386,13 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     <View style={[styles.container, containerHeight ? { height: containerHeight } : null]}>
       <TouchableOpacity 
         style={styles.videoContainer} 
-        onPress={handlePlayPause}
+        onPress={() => {
+          handlePlayPause();
+          // Show controls temporarily on tap
+          if (videoProgressBarRef.current) {
+            videoProgressBarRef.current.show();
+          }
+        }}
         activeOpacity={1}
       >
         <VideoView
@@ -366,7 +422,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
               <Ionicons 
                 name={saved ? "bookmark" : "bookmark-outline"} 
-                size={32} 
+                size={28} 
                 color="#fff" 
               />
               <Text style={styles.actionText}>Save</Text>
@@ -375,7 +431,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             <TouchableOpacity style={styles.actionButton} onPress={handleCommentsPress}>
               <Ionicons 
                 name="chatbubble-outline" 
-                size={32} 
+                size={28} 
                 color="#fff" 
               />
               <Text style={styles.actionText}>Comments</Text>
@@ -384,7 +440,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             <TouchableOpacity style={styles.actionButton} onPress={handleLearn}>
               <Ionicons 
                 name="school-outline" 
-                size={32} 
+                size={28} 
                 color="#fff" 
               />
               <Text style={styles.actionText}>Learn</Text>
@@ -455,6 +511,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
       />
 
       <VideoProgressBar
+        ref={videoProgressBarRef}
         currentTime={currentTime}
         duration={duration}
         onSeek={handleSeek}
@@ -490,21 +547,24 @@ const styles = StyleSheet.create({
   rightActions: {
     position: 'absolute',
     right: 8,
-    bottom: 60,
+    bottom: 120, // Increased bottom margin to avoid overlap
     alignItems: 'center',
-    gap: 16,
+    gap: 20, // Increased gap between buttons
   },
   actionButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 45,
-    marginBottom: 8,
+    width: 48, // Slightly wider touch target
+    height: 48,
   },
   actionText: {
     color: '#fff',
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   bottomMetadata: {
     flex: 1,
@@ -602,10 +662,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 4,
+    paddingHorizontal: 4,
   },
   timeText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 }); 
