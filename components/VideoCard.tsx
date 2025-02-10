@@ -138,6 +138,83 @@ const formatTime = (seconds: number) => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
+const ActionButton = memo(({ icon, label, onPress, isActive }: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  isActive?: boolean;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isActive) {
+      Animated.spring(glowAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.spring(glowAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isActive]);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.9,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+    >
+      <Animated.View 
+        style={[
+          styles.actionButton,
+          {
+            transform: [{ scale: scaleAnim }],
+          }
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.iconGlow,
+            {
+              opacity: glowAnim,
+              transform: [{
+                scale: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 1.4],
+                }),
+              }],
+            },
+          ]}
+        />
+        <Ionicons 
+          name={icon} 
+          size={28} 
+          color="#fff" 
+        />
+        <Text style={styles.actionText}>{label}</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
 export default function VideoCard({ video, isActive, containerHeight, isModal = false, onVideoComplete }: VideoCardProps) {
   const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState(false);
@@ -419,46 +496,41 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
 
         <View style={styles.overlay}>
           <View style={styles.rightActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
-              <Ionicons 
-                name={saved ? "bookmark" : "bookmark-outline"} 
-                size={28} 
-                color="#fff" 
-              />
-              <Text style={styles.actionText}>Save</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionButton} onPress={handleCommentsPress}>
-              <Ionicons 
-                name="chatbubble-outline" 
-                size={28} 
-                color="#fff" 
-              />
-              <Text style={styles.actionText}>Comments</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionButton} onPress={handleLearn}>
-              <Ionicons 
-                name="school-outline" 
-                size={28} 
-                color="#fff" 
-              />
-              <Text style={styles.actionText}>Learn</Text>
-            </TouchableOpacity>
+            <ActionButton
+              icon={saved ? "bookmark" : "bookmark-outline"}
+              label="Save"
+              onPress={handleSave}
+              isActive={saved}
+            />
+            <ActionButton
+              icon="chatbubble-outline"
+              label="Comments"
+              onPress={handleCommentsPress}
+            />
+            <ActionButton
+              icon="school-outline"
+              label="Learn"
+              onPress={handleLearn}
+            />
           </View>
 
-          <View style={styles.bottomMetadata}>
-            <Text style={styles.title} numberOfLines={1}>{video.title}</Text>
-            <Text style={styles.author} numberOfLines={1}>{video.authorName}</Text>
+          <Animated.View style={styles.bottomMetadataContainer}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>{video.title}</Text>
+              {subject && (
+                <TouchableOpacity 
+                  style={styles.subjectTag}
+                  onPress={() => router.push(`/subject/${subject.id}`)}
+                >
+                  <Text style={styles.subjectText}>{subject.name}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             
-            {subject && (
-              <TouchableOpacity 
-                style={styles.subjectTag}
-                onPress={() => router.push(`/subject/${subject.id}`)}
-              >
-                <Text style={styles.subjectText}>{subject.name}</Text>
-              </TouchableOpacity>
-            )}
+            <Text style={styles.author} numberOfLines={1}>
+              <Ionicons name="person-circle-outline" size={14} color="#fff" />
+              {" "}{video.authorName}
+            </Text>
             
             <View style={styles.conceptsContainer}>
               {video.conceptIds?.map((conceptId, index) => (
@@ -477,7 +549,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             <Text style={styles.description} numberOfLines={2}>
               {video.description}
             </Text>
-          </View>
+          </Animated.View>
         </View>
       </TouchableOpacity>
 
@@ -524,7 +596,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
 const styles = StyleSheet.create({
   container: {
     width: WINDOW_WIDTH,
-    height: '100%',
+    height: SCREEN_HEIGHT,
     backgroundColor: '#000',
   },
   videoContainer: {
@@ -547,15 +619,25 @@ const styles = StyleSheet.create({
   rightActions: {
     position: 'absolute',
     right: 8,
-    bottom: 120, // Increased bottom margin to avoid overlap
+    bottom: 100,
     alignItems: 'center',
-    gap: 20, // Increased gap between buttons
+    gap: 16,
+    zIndex: 2,
   },
   actionButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48, // Slightly wider touch target
+    width: 48,
     height: 48,
+    position: 'relative',
+  },
+  iconGlow: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1a472a',
+    opacity: 0.5,
   },
   actionText: {
     color: '#fff',
@@ -566,17 +648,29 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  bottomMetadata: {
+  bottomMetadataContainer: {
     flex: 1,
     paddingHorizontal: 16,
     paddingRight: 80,
-    marginBottom: 80,
+    marginBottom: TAB_BAR_HEIGHT + 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 16,
+    padding: 12,
+    backdropFilter: 'blur(10px)',
+    maxHeight: '30%',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   title: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 12,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
@@ -585,17 +679,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 8,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+    alignItems: 'center',
+  },
+  subjectTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexShrink: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+    backdropFilter: 'blur(8px)',
+  },
+  subjectText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  conceptsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  conceptTag: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  conceptText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
   description: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+    opacity: 0.9,
   },
   loadingContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -614,35 +755,6 @@ const styles = StyleSheet.create({
     color: '#ff4444',
     fontSize: 16,
     textAlign: 'center',
-  },
-  subjectTag: {
-    backgroundColor: '#1a472a',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  subjectText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  conceptsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  conceptTag: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  conceptText: {
-    color: '#fff',
-    fontSize: 12,
   },
   progressContainer: {
     position: 'absolute',
