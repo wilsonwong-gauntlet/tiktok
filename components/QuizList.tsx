@@ -56,7 +56,7 @@ export default function QuizList({ cachedQuizzes, loading }: QuizListProps) {
   const renderQuizRow = ({ item: quiz }: { item: QuizListProps['cachedQuizzes'][0] }) => (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => router.push(`/video/${quiz.videoId}?highlight=quiz`)}
+      onPress={() => router.push(`/quiz/${quiz.videoId}/${quiz.id}`)}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>

@@ -60,7 +60,7 @@ export default function NotesList({ cachedNotes, loading }: NotesListProps) {
   const renderNoteRow = ({ item: note }: { item: NotesListProps['cachedNotes'][0] }) => (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => router.push(`/video/${note.videoId}?timestamp=${note.timestamp}`)}
+      onPress={() => router.push(`/note/${note.videoId}/${note.id}`)}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
@@ -70,6 +70,7 @@ export default function NotesList({ cachedNotes, loading }: NotesListProps) {
               {note.content}
             </Text>
           </View>
+          <Ionicons name="chevron-forward" size={16} color="#666" />
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
