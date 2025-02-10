@@ -67,7 +67,7 @@ export default function LearningScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [activeSubjects, setActiveSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [cachedData, setCachedData] = useState<CachedData>({
     readings: {},
     quizzes: [],
@@ -76,203 +76,205 @@ export default function LearningScreen() {
     lastFetched: {},
   });
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  // Add a refresh function that can be called from other components
-  const refreshLearningData = useCallback(() => {
-    console.log('Refreshing learning data...');
-    loadUserData();
-  }, []);
-
-  // Export the refresh function to make it available to other components
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).refreshLearningData = refreshLearningData;
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        delete (window as any).refreshLearningData;
-      }
-    };
-  }, [refreshLearningData]);
-
+  // Load initial data
   useEffect(() => {
     if (!auth.currentUser) return;
+    loadInitialData();
+  }, []);
 
-    const loadTabData = async () => {
-      if (!auth.currentUser) return; // Double-check auth status before async operations
-      
-      switch (activeTab) {
-        case 'reading':
-          if (shouldFetchData('readings')) {
-            await loadReadingResources();
-          }
-          break;
-        case 'quizzes':
-          if (shouldFetchData('quizzes')) {
-            try {
-              setLoading(true);
-              const videosRef = collection(db, 'videos');
-              const videosSnapshot = await getDocs(query(videosRef, where('quiz', '!=', null)));
-              
-              const attemptsRef = collection(db, 'quizAttempts');
-              const attemptsSnapshot = await getDocs(
-                query(attemptsRef, where('userId', '==', auth.currentUser.uid))
-              );
-              const attempts = new Map(
-                attemptsSnapshot.docs.map(doc => [doc.data().quizId, doc.data() as QuizAttempt])
-              );
-
-              const subjectsRef = collection(db, 'subjects');
-              const subjectsSnapshot = await getDocs(subjectsRef);
-              const subjects = new Map(
-                subjectsSnapshot.docs.map(doc => [doc.id, doc.data().name])
-              );
-
-              const quizzesData = videosSnapshot.docs.map(doc => {
-                const video = doc.data();
-                return {
-                  ...video.quiz,
-                  videoId: doc.id,
-                  videoTitle: video.title,
-                  subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
-                  lastAttempt: attempts.get(video.quiz.id),
-                };
-              });
-
-              updateCache('quizzes', quizzesData);
-            } catch (error) {
-              console.error('Error loading quizzes:', error);
-            } finally {
-              setLoading(false);
-            }
-          }
-          break;
-        case 'notes':
-          if (shouldFetchData('notes')) {
-            try {
-              setLoading(true);
-              const notesRef = collection(db, `users/${auth.currentUser.uid}/notes`);
-              const notesSnapshot = await getDocs(query(notesRef));
-
-              const videoIds = new Set(notesSnapshot.docs.map(doc => doc.data().videoId));
-              const videosRef = collection(db, 'videos');
-              const videosSnapshot = await getDocs(query(videosRef));
-              const videos = new Map(
-                videosSnapshot.docs
-                  .filter(doc => videoIds.has(doc.id))
-                  .map(doc => [doc.id, { title: doc.data().title, subjectId: doc.data().subjectId }])
-              );
-
-              const subjectIds = new Set([...videos.values()].map(v => v.subjectId));
-              const subjectsRef = collection(db, 'subjects');
-              const subjectsSnapshot = await getDocs(subjectsRef);
-              const subjects = new Map(
-                subjectsSnapshot.docs
-                  .filter(doc => subjectIds.has(doc.id))
-                  .map(doc => [doc.id, doc.data().name])
-              );
-
-              const notesData = notesSnapshot.docs.map(doc => {
-                const note = doc.data();
-                const video = videos.get(note.videoId);
-                return {
-                  id: doc.id,
-                  videoId: note.videoId,
-                  videoTitle: video?.title || 'Unknown Video',
-                  subjectName: video ? subjects.get(video.subjectId) || 'Unknown Subject' : 'Unknown Subject',
-                  content: note.content,
-                  timestamp: note.timestamp || 0,
-                  createdAt: note.createdAt?.toDate() || new Date(),
-                };
-              });
-
-              updateCache('notes', notesData);
-            } catch (error) {
-              console.error('Error loading notes:', error);
-            } finally {
-              setLoading(false);
-            }
-          }
-          break;
-        case 'insights':
-          if (shouldFetchData('insights')) {
-            try {
-              setLoading(true);
-              const summariesRef = collection(db, `users/${auth.currentUser.uid}/savedSummaries`);
-              const summariesSnapshot = await getDocs(query(summariesRef));
-              
-              const summaries = summariesSnapshot.docs.map(doc => ({
-                videoId: doc.id,
-                ...doc.data(),
-                savedAt: doc.data().savedAt?.toDate() || new Date(),
-              }));
-
-              updateCache('insights', summaries);
-            } catch (error) {
-              console.error('Error loading insights:', error);
-            } finally {
-              setLoading(false);
-            }
-          }
-          break;
-      }
-    };
-
+  // Handle tab changes
+  useEffect(() => {
+    if (!auth.currentUser) return;
     loadTabData();
   }, [activeTab]);
 
-  const shouldFetchData = (dataType: keyof CachedData['lastFetched']): boolean => {
-    const lastFetched = cachedData.lastFetched[dataType];
-    if (!lastFetched) return true;
-    return Date.now() - lastFetched > CACHE_DURATION;
-  };
-
-  const updateCache = (
-    dataType: 'readings' | 'quizzes' | 'notes' | 'insights',
-    data: any
-  ) => {
-    setCachedData(prev => ({
-      ...prev,
-      [dataType]: data,
-      lastFetched: {
-        ...prev.lastFetched,
-        [dataType]: Date.now(),
-      },
-    }));
-  };
-
-  const loadUserData = async () => {
-    if (!auth.currentUser) return;
-
+  const loadInitialData = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       const [progressData, subjects] = await Promise.all([
-        SubjectService.getUserProgress(auth.currentUser.uid),
-        SubjectService.getActiveSubjects(auth.currentUser.uid),
+        SubjectService.getUserProgress(auth.currentUser!.uid),
+        SubjectService.getActiveSubjects(auth.currentUser!.uid),
       ]);
 
       setUserProgress(progressData);
       setActiveSubjects(subjects);
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Error loading initial data:', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const loadTabData = async () => {
+    if (!auth.currentUser) return;
+    
+    // Don't load data for overview tab
+    if (activeTab === 'overview') return;
+
+    // Map tab names to their cache keys
+    const cacheKey = {
+      reading: 'readings',
+      quizzes: 'quizzes',
+      notes: 'notes',
+      insights: 'insights'
+    } as const;
+    
+    // Check if we have valid cached data
+    const lastFetched = cachedData.lastFetched[cacheKey[activeTab]];
+    const isCacheValid = lastFetched && (Date.now() - lastFetched) < CACHE_DURATION;
+    
+    if (isCacheValid) {
+      console.log('Using cached data for', activeTab);
+      return;
+    }
+
+    // Check for existing data to avoid loading state
+    const hasExistingData = activeTab === 'reading' 
+      ? Object.keys(cachedData.readings).length > 0
+      : cachedData[activeTab].length > 0;
+
+    if (!hasExistingData) {
+      setIsLoading(true);
+    }
+    
+    try {
+      let newData;
+      switch (activeTab) {
+        case 'reading':
+          newData = await loadReadingResources();
+          break;
+        case 'quizzes':
+          newData = await loadQuizzes();
+          break;
+        case 'notes':
+          newData = await loadNotes();
+          break;
+        case 'insights':
+          newData = await loadInsights();
+          break;
+      }
+
+      if (newData) {
+        setCachedData(prev => ({
+          ...prev,
+          [activeTab === 'reading' ? 'readings' : activeTab]: newData,
+          lastFetched: { 
+            ...prev.lastFetched, 
+            [cacheKey[activeTab]]: Date.now() 
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading tab data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadQuizzes = async () => {
+    const videosRef = collection(db, 'videos');
+    const videosSnapshot = await getDocs(query(videosRef, where('quiz', '!=', null)));
+    
+    const attemptsRef = collection(db, 'quizAttempts');
+    const attemptsSnapshot = await getDocs(
+      query(attemptsRef, where('userId', '==', auth.currentUser!.uid))
+    );
+
+    const attempts = new Map(
+      attemptsSnapshot.docs.map(doc => [doc.data().quizId, doc.data() as QuizAttempt])
+    );
+
+    const subjectsRef = collection(db, 'subjects');
+    const subjectsSnapshot = await getDocs(subjectsRef);
+    const subjects = new Map(
+      subjectsSnapshot.docs.map(doc => [doc.id, doc.data().name])
+    );
+
+    return videosSnapshot.docs.map(doc => {
+      const video = doc.data();
+      return {
+        ...video.quiz,
+        videoId: doc.id,
+        videoTitle: video.title,
+        subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
+        lastAttempt: attempts.get(video.quiz.id),
+      };
+    });
+  };
+
+  const loadNotes = async () => {
+    const notesRef = collection(db, `users/${auth.currentUser!.uid}/notes`);
+    const notesSnapshot = await getDocs(query(notesRef));
+    
+    const videoIds = new Set(notesSnapshot.docs.map(doc => doc.data().videoId));
+    const videosRef = collection(db, 'videos');
+    const videosSnapshot = await getDocs(query(videosRef));
+    const videos = new Map(
+      videosSnapshot.docs
+        .filter(doc => videoIds.has(doc.id))
+        .map(doc => [doc.id, { title: doc.data().title, subjectId: doc.data().subjectId }])
+    );
+
+    const subjectIds = new Set([...videos.values()].map(v => v.subjectId));
+    const subjectsRef = collection(db, 'subjects');
+    const subjectsSnapshot = await getDocs(subjectsRef);
+    const subjects = new Map(
+      subjectsSnapshot.docs
+        .filter(doc => subjectIds.has(doc.id))
+        .map(doc => [doc.id, doc.data().name])
+    );
+
+    return notesSnapshot.docs.map(doc => {
+      const note = doc.data();
+      const video = videos.get(note.videoId);
+      return {
+        id: doc.id,
+        videoId: note.videoId,
+        videoTitle: video?.title || 'Unknown Video',
+        subjectName: video ? subjects.get(video.subjectId) || 'Unknown Subject' : 'Unknown Subject',
+        content: note.content,
+        timestamp: note.timestamp || 0,
+        createdAt: note.createdAt?.toDate() || new Date(),
+      };
+    });
+  };
+
+  const loadInsights = async () => {
+    const summariesRef = collection(db, `users/${auth.currentUser!.uid}/savedSummaries`);
+    const summariesSnapshot = await getDocs(query(summariesRef));
+    
+    return summariesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        videoId: doc.id,
+        summary: data.summary || '',
+        confusionPoints: data.confusionPoints || [],
+        valuableInsights: data.valuableInsights || [],
+        sentiment: data.sentiment || '',
+        commentCount: data.commentCount || 0,
+        savedAt: data.savedAt?.toDate() || new Date(),
+        videoTitle: data.videoTitle,
+      };
+    });
   };
 
   const loadReadingResources = async () => {
     if (!auth.currentUser) return;
 
     try {
-      setLoading(true);
       const allSubjects = await SubjectService.getAllSubjects();
       const readingsBySubject: CachedData['readings'] = {};
 
-      for (const subject of allSubjects) {
-        const videos = await VideoService.getVideosBySubject(subject.id);
+      // Load all videos in parallel
+      const subjectsWithVideos = await Promise.all(
+        allSubjects.map(async subject => ({
+          subject,
+          videos: await VideoService.getVideosBySubject(subject.id)
+        }))
+      );
+
+      // Process the results
+      for (const { subject, videos } of subjectsWithVideos) {
         const subjectResources = videos
           .filter(video => video.furtherReading && video.furtherReading.length > 0)
           .flatMap(video => 
@@ -291,11 +293,10 @@ export default function LearningScreen() {
         }
       }
 
-      updateCache('readings', readingsBySubject);
+      return readingsBySubject;
     } catch (error) {
       console.error('Error loading reading resources:', error);
-    } finally {
-      setLoading(false);
+      return {};
     }
   };
 
@@ -349,7 +350,19 @@ export default function LearningScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Active Subjects</Text>
-        {activeSubjects.length > 0 ? (
+        {isLoading ? (
+          <View style={styles.subjectsList}>
+            {[1, 2, 3].map((_, index) => (
+              <View key={index} style={[styles.subjectCard, styles.skeletonCard]}>
+                <View style={styles.skeletonTitle} />
+                <View style={styles.subjectStats}>
+                  <View style={[styles.skeletonStat, { width: 80 }]} />
+                  <View style={[styles.skeletonStat, { width: 60 }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : activeSubjects.length > 0 ? (
           <View style={styles.subjectsList}>
             {activeSubjects.map(subject => (
               <TouchableOpacity
@@ -415,41 +428,34 @@ export default function LearningScreen() {
             onResourcePress={(videoId, resource) => {
               router.push(`/video/${videoId}?highlight=reading`);
             }}
+            loading={isLoading}
           />
         );
       case 'insights':
         return (
           <SavedInsights 
             cachedInsights={cachedData.insights}
-            onDataLoaded={(insights) => updateCache('insights', insights)}
+            loading={isLoading}
           />
         );
       case 'quizzes':
         return (
           <QuizList 
             cachedQuizzes={cachedData.quizzes}
-            onDataLoaded={(quizzes) => updateCache('quizzes', quizzes)}
+            loading={isLoading}
           />
         );
       case 'notes':
         return (
           <NotesList 
             cachedNotes={cachedData.notes}
-            onDataLoaded={(notes) => updateCache('notes', notes)}
+            loading={isLoading}
           />
         );
       default:
         return null;
     }
   };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1a472a" />
-      </View>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -465,7 +471,9 @@ export default function LearningScreen() {
         {renderTab('notes', 'Notes', 'document-text-outline')}
       </View>
 
-      {renderContent()}
+      <View style={styles.contentContainer}>
+        {renderContent()}
+      </View>
     </SafeAreaView>
   );
 }
@@ -587,10 +595,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#111',
   },
   progressBarContainer: {
     height: 4,
@@ -625,5 +638,20 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     marginTop: 2,
+  },
+  skeletonCard: {
+    opacity: 0.7,
+  },
+  skeletonTitle: {
+    height: 20,
+    width: '60%',
+    backgroundColor: '#333',
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  skeletonStat: {
+    height: 16,
+    backgroundColor: '#333',
+    borderRadius: 4,
   },
 }); 

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../services/firebase/index';
@@ -25,251 +26,69 @@ interface SavedSummary {
 }
 
 interface SavedInsightsProps {
-  cachedInsights?: SavedSummary[];
-  onDataLoaded?: (insights: SavedSummary[]) => void;
+  cachedInsights: {
+    videoId: string;
+    summary: string;
+    confusionPoints: string[];
+    valuableInsights: string[];
+    sentiment: string;
+    commentCount: number;
+    savedAt: Date;
+    videoTitle?: string;
+  }[];
+  loading: boolean;
 }
 
-export default function SavedInsights({ cachedInsights, onDataLoaded }: SavedInsightsProps) {
-  const [savedSummaries, setSavedSummaries] = useState<SavedSummary[]>(cachedInsights || []);
-  const [loading, setLoading] = useState(!cachedInsights);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
+export default function SavedInsights({ cachedInsights, loading }: SavedInsightsProps) {
   const router = useRouter();
 
-  useEffect(() => {
-    if (!cachedInsights) {
-      loadSavedSummaries();
-    }
-  }, []);
-
-  const loadSavedSummaries = async () => {
-    if (!auth.currentUser) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const summariesRef = collection(db, `users/${auth.currentUser.uid}/savedSummaries`);
-      const summariesSnapshot = await getDocs(query(summariesRef));
-      
-      const summaries = summariesSnapshot.docs.map(doc => ({
-        videoId: doc.id,
-        ...doc.data(),
-        savedAt: doc.data().savedAt?.toDate() || new Date(),
-      })) as SavedSummary[];
-
-      const sortedSummaries = summaries.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
-      setSavedSummaries(sortedSummaries);
-      onDataLoaded?.(sortedSummaries);
-    } catch (error) {
-      console.error('Error loading saved summaries:', error);
-      setError('Failed to load saved summaries');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveSummary = async (videoId: string) => {
-    if (!auth.currentUser) return;
-
-    try {
-      const summaryRef = doc(db, `users/${auth.currentUser.uid}/savedSummaries/${videoId}`);
-      await deleteDoc(summaryRef);
-      const updatedSummaries = savedSummaries.filter(summary => summary.videoId !== videoId);
-      setSavedSummaries(updatedSummaries);
-      onDataLoaded?.(updatedSummaries);
-    } catch (error) {
-      console.error('Error removing summary:', error);
-    }
-  };
-
-  const toggleSelection = (videoId: string) => {
-    const newSelection = new Set(selectedItems);
-    if (newSelection.has(videoId)) {
-      newSelection.delete(videoId);
-    } else {
-      newSelection.add(videoId);
-    }
-    setSelectedItems(newSelection);
-    setIsSelectionMode(newSelection.size > 0);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedItems.size === savedSummaries.length) {
-      setSelectedItems(new Set());
-      setIsSelectionMode(false);
-    } else {
-      setSelectedItems(new Set(savedSummaries.map(summary => summary.videoId)));
-    }
-  };
-
-  const handleBulkShare = async () => {
-    if (selectedItems.size === 0) return;
-
-    const selectedSummaries = savedSummaries.filter(summary => 
-      selectedItems.has(summary.videoId)
+  if (loading) {
+    return (
+      <ScrollView style={styles.container}>
+        {[1, 2, 3].map((_, index) => (
+          <View key={index} style={[styles.insightCard, styles.skeletonCard]}>
+            <View style={[styles.skeletonText, { width: '70%', marginBottom: 12 }]} />
+            <View style={[styles.skeletonText, { width: '90%', height: 60, marginBottom: 16 }]} />
+            <View style={styles.insightSection}>
+              <View style={[styles.skeletonText, { width: '40%', marginBottom: 8 }]} />
+              {[1, 2].map((_, i) => (
+                <View key={i} style={[styles.skeletonText, { width: '80%', marginBottom: 4 }]} />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
     );
+  }
 
-    const summaryText = selectedSummaries.map(summary => [
-      `📊 Community Insights Summary for ${summary.videoTitle || 'Video'}`,
-      '',
-      '💭 Main Discussion:',
-      summary.summary,
-      '',
-      '❓ Key Areas of Confusion:',
-      ...summary.confusionPoints.map(point => `• ${point}`),
-      '',
-      '💡 Valuable Insights:',
-      ...summary.valuableInsights.map(insight => `• ${insight}`),
-      '',
-      '❤️ Community Engagement:',
-      summary.sentiment,
-      '',
-      `Based on ${summary.commentCount} comments`,
-      '-------------------',
-    ].join('\n')).join('\n\n');
-
-    try {
-      await Share.share({
-        message: summaryText,
-      });
-    } catch (error) {
-      console.error('Error sharing summaries:', error);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (!auth.currentUser || selectedItems.size === 0) return;
-
-    try {
-      const deletePromises = Array.from(selectedItems).map(videoId => 
-        deleteDoc(doc(db, `users/${auth.currentUser!.uid}/savedSummaries/${videoId}`))
-      );
-      await Promise.all(deletePromises);
-
-      const updatedSummaries = savedSummaries.filter(
-        summary => !selectedItems.has(summary.videoId)
-      );
-      setSavedSummaries(updatedSummaries);
-      onDataLoaded?.(updatedSummaries);
-      setSelectedItems(new Set());
-      setIsSelectionMode(false);
-    } catch (error) {
-      console.error('Error deleting summaries:', error);
-    }
-  };
-
-  const renderSummaryRow = ({ item: summary }: { item: SavedSummary }) => (
-    <TouchableOpacity 
-      style={[
-        styles.row,
-        selectedItems.has(summary.videoId) && styles.selectedRow
-      ]}
-      onLongPress={() => {
-        setIsSelectionMode(true);
-        toggleSelection(summary.videoId);
-      }}
-      onPress={() => {
-        if (isSelectionMode) {
-          toggleSelection(summary.videoId);
-        } else {
-          router.push(`/video/${summary.videoId}`);
-        }
-      }}
+  const renderInsightRow = ({ item: insight }: { item: SavedInsightsProps['cachedInsights'][0] }) => (
+    <TouchableOpacity
+      style={styles.row}
+      onPress={() => router.push(`/video/${insight.videoId}`)}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
           <View style={styles.rowLeft}>
-            {isSelectionMode && (
-              <Ionicons 
-                name={selectedItems.has(summary.videoId) ? "checkbox" : "square-outline"} 
-                size={20} 
-                color={selectedItems.has(summary.videoId) ? "#1a472a" : "#666"}
-                style={styles.checkbox}
-              />
-            )}
             <Ionicons name="chatbubbles-outline" size={16} color="#666" />
             <Text style={styles.summaryText} numberOfLines={2}>
-              {summary.summary}
+              {insight.summary}
             </Text>
           </View>
-          {!isSelectionMode && (
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleRemoveSummary(summary.videoId)}
-            >
-              <Ionicons name="trash-outline" size={16} color="#666" />
-            </TouchableOpacity>
-          )}
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
-            {summary.commentCount} comments • {summary.savedAt.toLocaleDateString()}
+            {insight.commentCount} comments • {insight.savedAt.toLocaleDateString()}
           </Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const renderHeader = () => {
-    if (!isSelectionMode || savedSummaries.length === 0) return null;
-
-    return (
-      <View style={styles.selectionHeader}>
-        <TouchableOpacity 
-          style={styles.selectionButton} 
-          onPress={toggleSelectAll}
-        >
-          <Ionicons 
-            name={selectedItems.size === savedSummaries.length ? "checkbox" : "square-outline"} 
-            size={20} 
-            color="#666" 
-          />
-          <Text style={styles.selectionButtonText}>
-            {selectedItems.size === savedSummaries.length ? 'Deselect All' : 'Select All'}
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.selectionActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleBulkShare}
-          >
-            <Ionicons name="share-outline" size={20} color="#666" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleBulkDelete}
-          >
-            <Ionicons name="trash-outline" size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {renderHeader()}
       <FlatList
-        data={savedSummaries}
-        renderItem={renderSummaryRow}
+        data={cachedInsights}
+        renderItem={renderInsightRow}
         keyExtractor={item => item.videoId}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
@@ -372,5 +191,24 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 4,
+  },
+  insightCard: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#222',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  insightSection: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  skeletonCard: {
+    opacity: 0.7,
+  },
+  skeletonText: {
+    backgroundColor: '#333',
+    borderRadius: 4,
+    height: 16,
   },
 }); 

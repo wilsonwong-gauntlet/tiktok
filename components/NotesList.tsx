@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../services/firebase/index';
@@ -24,35 +25,60 @@ interface Note {
 }
 
 interface NotesListProps {
-  cachedNotes?: Note[];
-  onDataLoaded?: (notes: Note[]) => void;
+  cachedNotes: {
+    id: string;
+    videoId: string;
+    videoTitle: string;
+    subjectName: string;
+    content: string;
+    timestamp: number;
+    createdAt: Date;
+  }[];
+  loading: boolean;
 }
 
-export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps) {
-  const [notes, setNotes] = useState<Note[]>(cachedNotes || []);
-  const [loading, setLoading] = useState(!cachedNotes);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
+export default function NotesList({ cachedNotes, loading }: NotesListProps) {
   const router = useRouter();
 
-  useEffect(() => {
-    if (!cachedNotes) {
-      loadNotes();
-    }
-  }, []);
+  if (loading) {
+    return (
+      <ScrollView style={styles.container}>
+        {[1, 2, 3].map((_, index) => (
+          <View key={index} style={[styles.noteCard, styles.skeletonCard]}>
+            <View style={[styles.skeletonText, { width: '70%', marginBottom: 12 }]} />
+            <View style={[styles.skeletonText, { width: '90%', height: 60, marginBottom: 16 }]} />
+            <View style={styles.noteMeta}>
+              <View style={[styles.skeletonText, { width: 80 }]} />
+              <View style={[styles.skeletonText, { width: 60 }]} />
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  }
 
-  const formatTimestamp = (timestamp: number | Timestamp | Date): Date => {
-    if (timestamp instanceof Timestamp) {
-      return timestamp.toDate();
-    }
-    if (timestamp instanceof Date) {
-      return timestamp;
-    }
-    // Handle seconds or milliseconds timestamps
-    const msTimestamp = timestamp > 9999999999 ? timestamp : timestamp * 1000;
-    return new Date(msTimestamp);
-  };
+  const renderNoteRow = ({ item: note }: { item: NotesListProps['cachedNotes'][0] }) => (
+    <TouchableOpacity
+      style={styles.row}
+      onPress={() => router.push(`/video/${note.videoId}?timestamp=${note.timestamp}`)}
+    >
+      <View style={styles.rowContent}>
+        <View style={styles.rowHeader}>
+          <View style={styles.rowLeft}>
+            <Ionicons name="document-text-outline" size={16} color="#666" />
+            <Text style={styles.noteText} numberOfLines={2}>
+              {note.content}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.rowMeta}>
+          <Text style={styles.metaText}>
+            {note.subjectName} • From {note.videoTitle} • {formatVideoTimestamp(note.timestamp)}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   const formatVideoTimestamp = (seconds: number): string => {
     try {
@@ -65,284 +91,10 @@ export default function NotesList({ cachedNotes, onDataLoaded }: NotesListProps)
     }
   };
 
-  const loadNotes = async () => {
-    if (!auth.currentUser) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Get all notes for the user
-      const notesRef = collection(db, `users/${auth.currentUser.uid}/notes`);
-      const notesSnapshot = await getDocs(query(notesRef));
-
-      // Get all video titles
-      const videoIds = new Set(notesSnapshot.docs.map(doc => doc.data().videoId));
-      const videosRef = collection(db, 'videos');
-      const videosSnapshot = await getDocs(query(videosRef));
-      const videos = new Map(
-        videosSnapshot.docs
-          .filter(doc => videoIds.has(doc.id))
-          .map(doc => [doc.id, { title: doc.data().title, subjectId: doc.data().subjectId }])
-      );
-
-      // Get subject names
-      const subjectIds = new Set([...videos.values()].map(v => v.subjectId));
-      const subjectsRef = collection(db, 'subjects');
-      const subjectsSnapshot = await getDocs(subjectsRef);
-      const subjects = new Map(
-        subjectsSnapshot.docs
-          .filter(doc => subjectIds.has(doc.id))
-          .map(doc => [doc.id, doc.data().name])
-      );
-
-      // Combine all data
-      const notesData = notesSnapshot.docs.map(doc => {
-        const note = doc.data();
-        const video = videos.get(note.videoId);
-        return {
-          id: doc.id,
-          videoId: note.videoId,
-          videoTitle: video?.title || 'Unknown Video',
-          subjectName: video ? subjects.get(video.subjectId) || 'Unknown Subject' : 'Unknown Subject',
-          content: note.content,
-          timestamp: note.timestamp || 0,
-          createdAt: formatTimestamp(note.createdAt || new Date()),
-        };
-      });
-
-      const sortedNotes = notesData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      setNotes(sortedNotes);
-      onDataLoaded?.(sortedNotes);
-    } catch (error) {
-      console.error('Error loading notes:', error);
-      setError('Failed to load notes');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    if (!auth.currentUser) return;
-
-    try {
-      const noteRef = doc(db, `users/${auth.currentUser.uid}/notes/${noteId}`);
-      await deleteDoc(noteRef);
-      const updatedNotes = notes.filter(note => note.id !== noteId);
-      setNotes(updatedNotes);
-      onDataLoaded?.(updatedNotes);
-    } catch (error) {
-      console.error('Error deleting note:', error);
-    }
-  };
-
-  const handleShareNote = async (note: Note) => {
-    try {
-      const noteText = [
-        '📝 Video Note',
-        '',
-        note.content,
-        '',
-        `📺 From: ${note.videoTitle}`,
-        `⏱️ At: ${formatVideoTimestamp(note.timestamp)}`,
-        `📚 Subject: ${note.subjectName}`,
-        `📅 Created: ${note.createdAt.toLocaleDateString()}`,
-      ].join('\n');
-
-      await Share.share({
-        message: noteText,
-      });
-    } catch (error) {
-      console.error('Error sharing note:', error);
-    }
-  };
-
-  const toggleSelection = (id: string) => {
-    const newSelection = new Set(selectedItems);
-    if (newSelection.has(id)) {
-      newSelection.delete(id);
-    } else {
-      newSelection.add(id);
-    }
-    setSelectedItems(newSelection);
-    setIsSelectionMode(newSelection.size > 0);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedItems.size === notes.length) {
-      setSelectedItems(new Set());
-      setIsSelectionMode(false);
-    } else {
-      setSelectedItems(new Set(notes.map(note => note.id)));
-    }
-  };
-
-  const handleBulkShare = async () => {
-    if (selectedItems.size === 0) return;
-
-    const selectedNotes = notes.filter(note => 
-      selectedItems.has(note.id)
-    );
-
-    const notesText = selectedNotes.map(note => [
-      '📝 Video Note',
-      '',
-      note.content,
-      '',
-      `📺 From: ${note.videoTitle}`,
-      `⏱️ At: ${formatVideoTimestamp(note.timestamp)}`,
-      `📚 Subject: ${note.subjectName}`,
-      `📅 Created: ${note.createdAt.toLocaleDateString()}`,
-      '-------------------',
-    ].join('\n')).join('\n\n');
-
-    try {
-      await Share.share({
-        message: notesText,
-      });
-    } catch (error) {
-      console.error('Error sharing notes:', error);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (!auth.currentUser || selectedItems.size === 0) return;
-
-    try {
-      const deletePromises = Array.from(selectedItems).map(noteId => 
-        deleteDoc(doc(db, `users/${auth.currentUser!.uid}/notes/${noteId}`))
-      );
-      await Promise.all(deletePromises);
-
-      const updatedNotes = notes.filter(
-        note => !selectedItems.has(note.id)
-      );
-      setNotes(updatedNotes);
-      onDataLoaded?.(updatedNotes);
-      setSelectedItems(new Set());
-      setIsSelectionMode(false);
-    } catch (error) {
-      console.error('Error deleting notes:', error);
-    }
-  };
-
-  const renderNoteRow = ({ item: note }: { item: Note }) => (
-    <TouchableOpacity
-      style={[
-        styles.row,
-        selectedItems.has(note.id) && styles.selectedRow
-      ]}
-      onLongPress={() => {
-        setIsSelectionMode(true);
-        toggleSelection(note.id);
-      }}
-      onPress={() => {
-        if (isSelectionMode) {
-          toggleSelection(note.id);
-        } else {
-          router.push(`/video/${note.videoId}?timestamp=${note.timestamp}`);
-        }
-      }}
-    >
-      <View style={styles.rowContent}>
-        <View style={styles.rowHeader}>
-          <View style={styles.rowLeft}>
-            {isSelectionMode && (
-              <Ionicons 
-                name={selectedItems.has(note.id) ? "checkbox" : "square-outline"} 
-                size={20} 
-                color={selectedItems.has(note.id) ? "#1a472a" : "#666"}
-                style={styles.checkbox}
-              />
-            )}
-            <Ionicons name="document-text-outline" size={16} color="#666" />
-            <Text style={styles.noteText} numberOfLines={2}>
-              {note.content}
-            </Text>
-          </View>
-          {!isSelectionMode && (
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleShareNote(note)}
-              >
-                <Ionicons name="share-outline" size={16} color="#666" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleDeleteNote(note.id)}
-              >
-                <Ionicons name="trash-outline" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-        <View style={styles.rowMeta}>
-          <Text style={styles.metaText}>
-            {note.subjectName} • From {note.videoTitle} • {formatVideoTimestamp(note.timestamp)}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderHeader = () => {
-    if (!isSelectionMode || notes.length === 0) return null;
-
-    return (
-      <View style={styles.selectionHeader}>
-        <TouchableOpacity 
-          style={styles.selectionButton} 
-          onPress={toggleSelectAll}
-        >
-          <Ionicons 
-            name={selectedItems.size === notes.length ? "checkbox" : "square-outline"} 
-            size={20} 
-            color="#666" 
-          />
-          <Text style={styles.selectionButtonText}>
-            {selectedItems.size === notes.length ? 'Deselect All' : 'Select All'}
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.selectionActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleBulkShare}
-          >
-            <Ionicons name="share-outline" size={20} color="#666" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={handleBulkDelete}
-          >
-            <Ionicons name="trash-outline" size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {renderHeader()}
       <FlatList
-        data={notes}
+        data={cachedNotes}
         renderItem={renderNoteRow}
         keyExtractor={item => item.id}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -365,9 +117,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  selectedRow: {
-    backgroundColor: 'rgba(26, 71, 42, 0.2)',
-  },
   rowContent: {
     gap: 4,
   },
@@ -383,21 +132,11 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'flex-start',
   },
-  checkbox: {
-    marginRight: 4,
-  },
   noteText: {
     flex: 1,
     color: '#fff',
     fontSize: 14,
     lineHeight: 20,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    padding: 4,
   },
   rowMeta: {
     flexDirection: 'row',
@@ -420,32 +159,24 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 14,
+  noteCard: {
     padding: 16,
-    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
+    borderRadius: 4,
+    marginBottom: 16,
   },
-  selectionHeader: {
+  skeletonCard: {
+    opacity: 0.7,
+  },
+  skeletonText: {
+    backgroundColor: '#333',
+    borderRadius: 4,
+    height: 16,
+  },
+  noteMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
-  },
-  selectionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  selectionButtonText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  selectionActions: {
-    flexDirection: 'row',
-    gap: 16,
   },
 }); 

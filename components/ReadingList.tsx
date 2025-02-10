@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Share,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FurtherReading } from '../types/video';
@@ -22,11 +23,33 @@ interface ReadingListProps {
     };
   };
   onResourcePress: (videoId: string, resource: FurtherReading) => void;
+  loading?: boolean;
 }
 
-export default function ReadingList({ readings, onResourcePress }: ReadingListProps) {
+export default function ReadingList({ readings, onResourcePress, loading }: ReadingListProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  if (loading) {
+    return (
+      <ScrollView style={styles.container}>
+        {[1, 2, 3].map((_, index) => (
+          <View key={index} style={styles.section}>
+            <View style={[styles.skeletonText, { width: '40%', marginBottom: 12 }]} />
+            <View style={styles.resourcesList}>
+              {[1, 2].map((_, resourceIndex) => (
+                <View key={resourceIndex} style={[styles.resourceCard, styles.skeletonCard]}>
+                  <View style={[styles.skeletonText, { width: '70%', marginBottom: 8 }]} />
+                  <View style={[styles.skeletonText, { width: '40%', marginBottom: 8 }]} />
+                  <View style={[styles.skeletonText, { width: '90%' }]} />
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  }
 
   // Flatten the readings data structure
   const flatReadings = Object.entries(readings).flatMap(([subjectId, { subjectName, resources }]) =>
@@ -190,55 +213,78 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#111',
   },
+  section: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  resourcesList: {
+    gap: 12,
+  },
+  resourceCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    padding: 16,
+  },
   row: {
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   selectedRow: {
-    backgroundColor: 'rgba(26, 71, 42, 0.2)',
+    backgroundColor: '#333',
   },
   rowContent: {
-    gap: 4,
+    gap: 8,
   },
   rowHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   rowLeft: {
     flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    alignItems: 'flex-start',
   },
   checkbox: {
-    marginRight: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#666',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContent: {
     flex: 1,
   },
   title: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
   },
   author: {
-    color: '#666',
-    fontSize: 12,
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
-  rowMeta: {
-    flexDirection: 'row',
+  description: {
+    fontSize: 14,
+    color: '#fff',
+    lineHeight: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingLeft: 24,
-  },
-  metaText: {
-    color: '#666',
-    fontSize: 12,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#222',
+    padding: 20,
   },
   emptyContainer: {
     padding: 16,
@@ -246,7 +292,8 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: '#666',
-    fontSize: 14,
+    fontSize: 16,
+    textAlign: 'center',
   },
   selectionHeader: {
     flexDirection: 'row',
@@ -272,5 +319,25 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 4,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#222',
+  },
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  skeletonCard: {
+    opacity: 0.7,
+  },
+  skeletonText: {
+    height: 16,
+    backgroundColor: '#333',
+    borderRadius: 4,
   },
 }); 
