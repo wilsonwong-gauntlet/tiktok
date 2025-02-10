@@ -64,7 +64,7 @@ export default function SavedInsights({ cachedInsights, loading }: SavedInsights
   const renderInsightRow = ({ item: insight }: { item: SavedInsightsProps['cachedInsights'][0] }) => (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => router.push(`/video/${insight.videoId}`)}
+      onPress={() => router.push(`/insight/${insight.videoId}`)}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
@@ -74,10 +74,11 @@ export default function SavedInsights({ cachedInsights, loading }: SavedInsights
               {insight.summary}
             </Text>
           </View>
+          <Ionicons name="chevron-forward" size={16} color="#666" />
         </View>
         <View style={styles.rowMeta}>
           <Text style={styles.metaText}>
-            {insight.commentCount} comments • {insight.savedAt.toLocaleDateString()}
+            {insight.commentCount || 0} comments • {insight.savedAt.toLocaleDateString()}
           </Text>
         </View>
       </View>

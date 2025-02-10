@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FurtherReading } from '../types/video';
+import { useRouter } from 'expo-router';
 
 interface ReadingListProps {
   readings: {
@@ -29,6 +30,7 @@ interface ReadingListProps {
 export default function ReadingList({ readings, onResourcePress, loading }: ReadingListProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const router = useRouter();
 
   if (loading) {
     return (
@@ -126,7 +128,7 @@ export default function ReadingList({ readings, onResourcePress, loading }: Read
         if (isSelectionMode) {
           toggleSelection(item.id);
         } else {
-          onResourcePress(item.videoId, item);
+          router.push(`/reading/${encodeURIComponent(item.title)}?videoId=${item.videoId}`);
         }
       }}
     >
