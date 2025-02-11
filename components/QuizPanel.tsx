@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     borderRadius: 2,
   },
   question: {
@@ -233,26 +233,27 @@ const styles = StyleSheet.create({
     borderColor: '#333',
   },
   selectedOption: {
-    borderColor: '#1a472a',
-    backgroundColor: '#1a472a22',
+    borderColor: '#9580FF',
+    backgroundColor: 'rgba(149, 128, 255, 0.15)',
   },
   correctOption: {
     borderColor: '#4CAF50',
-    backgroundColor: '#4CAF5022',
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
   },
   incorrectOption: {
     borderColor: '#f44336',
-    backgroundColor: '#f4433622',
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
   },
   optionText: {
     color: '#fff',
     fontSize: 16,
   },
   selectedOptionText: {
-    color: '#fff',
+    color: '#9580FF',
+    fontWeight: '600',
   },
   checkButton: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     padding: 16,
     borderRadius: 8,
     marginHorizontal: 20,
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   nextButton: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     padding: 16,
     borderRadius: 8,
     marginTop: 16,
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
   score: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#1a472a',
+    color: '#9580FF',
   },
   improvement: {
     flexDirection: 'row',
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   retryButton: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     padding: 16,
     borderRadius: 8,
     marginHorizontal: 20,

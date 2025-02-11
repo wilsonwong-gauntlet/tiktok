@@ -451,193 +451,147 @@ export default function LearningPanel({
   const renderNotesContent = () => (
     <ScrollView style={styles.tabContent}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Capture</Text>
-        <TextInput
-          style={styles.textInput}
-          multiline
-          placeholder="Capture your thoughts..."
-          placeholderTextColor="#666"
-          value={notes.content}
-          onChangeText={text => setNotes(prev => ({ ...prev, content: text }))}
-        />
+        <View style={styles.sectionHeader}>
+          <Ionicons name="create-outline" size={20} color="#fff" />
+          <Text style={styles.sectionTitle}>Quick Capture</Text>
+        </View>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            multiline
+            placeholder="Capture your thoughts..."
+            placeholderTextColor="#666"
+            value={notes.content}
+            onChangeText={text => setNotes(prev => ({ ...prev, content: text }))}
+          />
+        </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Key Takeaways</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="bulb-outline" size={20} color="#fff" />
+          <Text style={styles.sectionTitle}>Key Takeaways</Text>
+        </View>
         {notes.keyTakeaways.map((takeaway, index) => (
           <View key={index} style={styles.takeawayContainer}>
-            <TextInput
-              style={styles.textInput}
-              value={takeaway}
-              onChangeText={text => {
-                const newTakeaways = [...notes.keyTakeaways];
-                newTakeaways[index] = text;
-                setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
-              }}
-              placeholder="Add a key takeaway..."
-              placeholderTextColor="#666"
-            />
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => {
-                const newTakeaways = notes.keyTakeaways.filter((_, i) => i !== index);
-                setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
-              }}
-            >
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={takeaway}
+                onChangeText={text => {
+                  const newTakeaways = [...notes.keyTakeaways];
+                  newTakeaways[index] = text;
+                  setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
+                }}
+                placeholder="Add a key takeaway..."
+                placeholderTextColor="#666"
+              />
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  const newTakeaways = notes.keyTakeaways.filter((_, i) => i !== index);
+                  setNotes(prev => ({ ...prev, keyTakeaways: newTakeaways }));
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
           </View>
         ))}
         <TouchableOpacity style={styles.addButton} onPress={handleAddTakeaway}>
-          <Text style={styles.addButtonText}>+ Add Takeaway</Text>
+          <Ionicons name="add-circle-outline" size={20} color="#666" style={styles.addIcon} />
+          <Text style={styles.addButtonText}>Add Takeaway</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Reflections</Text>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="telescope-outline" size={20} color="#fff" />
+          <Text style={styles.sectionTitle}>Reflections</Text>
+        </View>
         
-        <View style={styles.reflectionSection}>
-          <Text style={styles.reflectionTitle}>Understanding</Text>
-          <Text style={styles.reflectionSubtitle}>What are the main concepts you understand well?</Text>
-          {reflections.understanding.map((item, index) => (
-            <View key={index} style={styles.reflectionInputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={item}
-                onChangeText={text => handleReflectionChange('understanding', index, text)}
-                placeholder="Add reflection..."
-                placeholderTextColor="#666"
-              />
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => {
-                  const newReflections = reflections.understanding.filter((_, i) => i !== index);
-                  setReflections(prev => ({ ...prev, understanding: newReflections }));
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
+        {Object.entries({
+          understanding: {
+            icon: 'brain-outline',
+            title: 'Understanding',
+            subtitle: 'What are the main concepts you understand well?'
+          },
+          gaps: {
+            icon: 'help-circle-outline',
+            title: 'Knowledge Gaps',
+            subtitle: 'What concepts need more clarification?'
+          },
+          applications: {
+            icon: 'rocket-outline',
+            title: 'Applications',
+            subtitle: 'How can you apply these concepts?'
+          },
+          connections: {
+            icon: 'git-network-outline',
+            title: 'Connections',
+            subtitle: 'How does this connect to other concepts?'
+          }
+        }).map(([key, config]) => (
+          <View key={key} style={styles.reflectionSection}>
+            <View style={styles.reflectionHeader}>
+              <Ionicons name={config.icon as any} size={18} color="#999" />
+              <View style={styles.reflectionTitleContainer}>
+                <Text style={styles.reflectionTitle}>{config.title}</Text>
+                <Text style={styles.reflectionSubtitle}>{config.subtitle}</Text>
+              </View>
             </View>
-          ))}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setReflections(prev => ({
-              ...prev,
-              understanding: [...prev.understanding, '']
-            }))}
-          >
-            <Text style={styles.addButtonText}>+ Add Understanding</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.reflectionSection}>
-          <Text style={styles.reflectionTitle}>Knowledge Gaps</Text>
-          <Text style={styles.reflectionSubtitle}>What concepts need more clarification?</Text>
-          {reflections.gaps.map((item, index) => (
-            <View key={index} style={styles.reflectionInputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={item}
-                onChangeText={text => handleReflectionChange('gaps', index, text)}
-                placeholder="Add gap..."
-                placeholderTextColor="#666"
-              />
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => {
-                  const newReflections = reflections.gaps.filter((_, i) => i !== index);
-                  setReflections(prev => ({ ...prev, gaps: newReflections }));
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setReflections(prev => ({
-              ...prev,
-              gaps: [...prev.gaps, '']
-            }))}
-          >
-            <Text style={styles.addButtonText}>+ Add Gap</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.reflectionSection}>
-          <Text style={styles.reflectionTitle}>Applications</Text>
-          <Text style={styles.reflectionSubtitle}>How can you apply these concepts?</Text>
-          {reflections.applications.map((item, index) => (
-            <View key={index} style={styles.reflectionInputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={item}
-                onChangeText={text => handleReflectionChange('applications', index, text)}
-                placeholder="Add application..."
-                placeholderTextColor="#666"
-              />
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => {
-                  const newReflections = reflections.applications.filter((_, i) => i !== index);
-                  setReflections(prev => ({ ...prev, applications: newReflections }));
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setReflections(prev => ({
-              ...prev,
-              applications: [...prev.applications, '']
-            }))}
-          >
-            <Text style={styles.addButtonText}>+ Add Application</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.reflectionSection}>
-          <Text style={styles.reflectionTitle}>Connections</Text>
-          <Text style={styles.reflectionSubtitle}>How does this connect to other concepts?</Text>
-          {reflections.connections.map((item, index) => (
-            <View key={index} style={styles.reflectionInputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={item}
-                onChangeText={text => handleReflectionChange('connections', index, text)}
-                placeholder="Add connection..."
-                placeholderTextColor="#666"
-              />
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => {
-                  const newReflections = reflections.connections.filter((_, i) => i !== index);
-                  setReflections(prev => ({ ...prev, connections: newReflections }));
-                }}
-              >
-                <Ionicons name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setReflections(prev => ({
-              ...prev,
-              connections: [...prev.connections, '']
-            }))}
-          >
-            <Text style={styles.addButtonText}>+ Add Connection</Text>
-          </TouchableOpacity>
-        </View>
+            {reflections[key as keyof Reflections].map((item, index) => (
+              <View key={index} style={styles.reflectionInputContainer}>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={item}
+                    onChangeText={text => handleReflectionChange(key as keyof Reflections, index, text)}
+                    placeholder={`Add ${key}...`}
+                    placeholderTextColor="#666"
+                  />
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => {
+                      const newReflections = reflections[key as keyof Reflections].filter((_, i) => i !== index);
+                      setReflections(prev => ({ ...prev, [key]: newReflections }));
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setReflections(prev => ({
+                ...prev,
+                [key]: [...prev[key as keyof Reflections], '']
+              }))}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#666" style={styles.addIcon} />
+              <Text style={styles.addButtonText}>Add {config.title}</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
       </View>
 
       <TouchableOpacity 
-        style={styles.saveButton} 
+        style={[
+          styles.saveButton,
+          saveStatus === 'saving' && styles.saveButtonDisabled
+        ]} 
         onPress={handleSaveNotes}
+        disabled={saveStatus === 'saving'}
       >
-        <Text style={styles.saveButtonText}>Save Notes</Text>
+        {saveStatus === 'saving' ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <Ionicons name="save-outline" size={20} color="#fff" style={styles.saveIcon} />
+            <Text style={styles.saveButtonText}>Save Notes</Text>
+          </>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -731,32 +685,50 @@ export default function LearningPanel({
           </View>
 
           <View style={styles.navigation}>
-            {[
-              { id: 'summary', icon: 'document-text-outline', label: 'Summary', subtitle: 'Quick Overview', complete: !!summary },
-              { id: 'transcription', icon: 'text-outline', label: 'Transcript', subtitle: 'Full Content', complete: transcriptionStatus === 'completed' },
-              { id: 'notes', icon: 'pencil-outline', label: 'Notes', subtitle: 'Your Thoughts', complete: notes.content.length > 0 },
-              { id: 'quiz', icon: 'school-outline', label: 'Quiz', subtitle: 'Test Knowledge', complete: !!quiz },
-              { id: 'reading', icon: 'book-outline', label: 'Reading', subtitle: 'Learn More', complete: furtherReading && furtherReading.length > 0 }
-            ].map(item => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.navItem, activeTab === item.id && styles.activeNavItem]}
-                onPress={() => setActiveTab(item.id as Tab)}
-              >
-                <View style={styles.navIcon}>
-                  <Ionicons name={item.icon as any} size={22} color={activeTab === item.id ? '#1a472a' : '#fff'} />
-                  {item.complete && (
-                    <View style={styles.completeBadge}>
-                      <Ionicons name="checkmark" size={12} color="#fff" />
-                    </View>
-                  )}
-                </View>
-                <View style={styles.navContent}>
-                  <Text style={[styles.navTitle, activeTab === item.id && styles.activeNavTitle]}>{item.label}</Text>
-                  <Text style={styles.navSubtitle}>{item.subtitle}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.navContent}
+            >
+              {[
+                { id: 'summary', icon: 'document-text-outline', label: 'Summary' },
+                { id: 'transcription', icon: 'text-outline', label: 'Transcript' },
+                { id: 'notes', icon: 'pencil-outline', label: 'Notes' },
+                { id: 'quiz', icon: 'school-outline', label: 'Quiz' },
+                { id: 'reading', icon: 'book-outline', label: 'Reading' }
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.navItem, activeTab === item.id && styles.activeNavItem]}
+                  onPress={() => setActiveTab(item.id as Tab)}
+                >
+                  <Ionicons 
+                    name={item.icon as any} 
+                    size={18} 
+                    color={activeTab === item.id ? '#9580FF' : '#999'} 
+                    style={styles.navIcon}
+                  />
+                  <Text style={[
+                    styles.navLabel,
+                    activeTab === item.id && styles.activeNavLabel
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.statusIndicators}>
+              {[
+                { id: 'summary', complete: !!summary },
+                { id: 'transcription', complete: transcriptionStatus === 'completed' },
+                { id: 'notes', complete: notes.content.length > 0 },
+                { id: 'quiz', complete: !!quiz },
+                { id: 'reading', complete: furtherReading && furtherReading.length > 0 }
+              ].map(item => item.complete && (
+                <View key={item.id} style={styles.statusDot} />
+              ))}
+            </View>
           </View>
 
           <View style={styles.content}>
@@ -817,7 +789,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressPercentage: {
-    color: '#1a472a',
+    color: '#9580FF',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -828,62 +800,55 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     borderRadius: 2,
   },
   navigation: {
     backgroundColor: '#1a1a1a',
+    paddingTop: 12,
     paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  navContent: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginHorizontal: 8,
-    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   activeNavItem: {
-    backgroundColor: 'rgba(26, 71, 42, 0.15)',
+    backgroundColor: 'rgba(149, 128, 255, 0.15)',
   },
   navIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 6,
   },
-  completeBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#1a472a',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#1a1a1a',
-  },
-  navContent: {
-    flex: 1,
-  },
-  navTitle: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  activeNavTitle: {
-    color: '#1a472a',
-  },
-  navSubtitle: {
+  navLabel: {
     color: '#999',
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  activeNavLabel: {
+    color: '#9580FF',
+    fontWeight: '600',
+  },
+  statusIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 8,
+    gap: 4,
+  },
+  statusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#9580FF',
   },
   content: {
     flex: 1,
@@ -953,16 +918,23 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   addButton: {
-    backgroundColor: '#222',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 8,
     padding: 12,
-    alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  addIcon: {
+    marginRight: 8,
   },
   addButtonText: {
     color: '#666',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
+    marginLeft: 8,
   },
   readingItem: {
     backgroundColor: '#222',
@@ -999,16 +971,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectedOption: {
-    backgroundColor: '#333',
-    borderColor: '#666',
+    backgroundColor: 'rgba(149, 128, 255, 0.15)',
+    borderColor: '#9580FF',
     borderWidth: 1,
   },
   correctOption: {
-    backgroundColor: '#1a472a',
+    backgroundColor: 'rgba(26, 71, 42, 0.8)', // Keeping green but making it slightly transparent
+  },
+  incorrectOption: {
+    backgroundColor: 'rgba(255, 68, 68, 0.8)', // Adding red with transparency for wrong answers
   },
   optionText: {
     color: '#fff',
     fontSize: 16,
+  },
+  selectedOptionText: {
+    color: '#9580FF',
+    fontWeight: '600',
   },
   explanation: {
     color: '#999',
@@ -1046,112 +1025,62 @@ const styles = StyleSheet.create({
   },
   reflectionSection: {
     marginBottom: 24,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+  },
+  reflectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    gap: 8,
+  },
+  reflectionTitleContainer: {
+    flex: 1,
   },
   reflectionTitle: {
-    fontSize: 18,
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
+    marginBottom: 4,
   },
-  promptContainer: {
-    marginBottom: 16,
-  },
-  promptText: {
+  reflectionSubtitle: {
+    color: '#999',
     fontSize: 14,
-    color: '#666',
+  },
+  reflectionInputContainer: {
     marginBottom: 8,
   },
-  reflectionInput: {
-    backgroundColor: '#f5f5f5',
+  removeButton: {
+    position: 'absolute',
+    right: 8,
+    top: 10,
+    padding: 4,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#9580FF',
+    padding: 16,
     borderRadius: 8,
-    padding: 12,
-    minHeight: 80,
-    color: '#333',
-    fontSize: 14,
-    textAlignVertical: 'top',
+    marginTop: 24,
+    marginBottom: 32,
   },
-  intuitionSection: {
-    marginBottom: 20,
+  saveButtonDisabled: {
+    opacity: 0.5,
   },
-  successText: {
-    color: '#1a472a',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 10,
+  saveIcon: {
+    marginRight: 8,
   },
-  errorText: {
-    color: '#ff3b30',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  transcriptionContent: {
-    flex: 1,
-    padding: 15,
-  },
-  transcriptionText: {
+  saveButtonText: {
     color: '#fff',
     fontSize: 16,
-    lineHeight: 24,
-  },
-  transcriptionLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  transcriptionLoadingText: {
-    color: '#fff',
-    fontSize: 16,
-    marginTop: 10,
-  },
-  transcriptionError: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  transcriptionErrorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    marginTop: 10,
-  },
-  transcriptionEmpty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  transcriptionEmptyText: {
-    color: '#666',
-    fontSize: 16,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyStateText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  generateButton: {
-    backgroundColor: '#333',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 15,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   tabContent: {
     flex: 1,
+    padding: 16,
   },
   scrollContent: {
     flex: 1,
@@ -1217,44 +1146,104 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
   },
-  reflectionSubtitle: {
-    color: '#999',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  reflectionInputContainer: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    gap: 8,
   },
-  removeButton: {
-    padding: 4,
-  },
-  saveButton: {
-    backgroundColor: '#333',
-    padding: 16,
+  inputContainer: {
+    backgroundColor: '#222',
     borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  saveButtonText: {
+  transcriptionContent: {
+    flex: 1,
+    padding: 15,
+  },
+  transcriptionText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    lineHeight: 24,
+  },
+  transcriptionLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionLoadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  transcriptionError: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionErrorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    marginTop: 10,
+  },
+  transcriptionEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  transcriptionEmptyText: {
+    color: '#666',
+    fontSize: 16,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  generateButton: {
+    backgroundColor: '#333',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  generateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
   transcriptionSegment: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    marginBottom: 8,
   },
   timestamp: {
-    color: '#666',
-    fontSize: 12,
+    color: '#9580FF',
+    fontSize: 13,
+    fontWeight: '500',
     marginBottom: 4,
+    opacity: 0.8,
   },
   plainTranscription: {
     padding: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
   },
 }); 
