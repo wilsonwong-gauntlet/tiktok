@@ -838,16 +838,45 @@ export class VideoService {
 
   static async smartSeek(videoId: string, query: string): Promise<SmartSeekResult[]> {
     try {
+      console.log('VideoService: Starting smartSeek', { videoId, query });
       const functions = getFunctions();
       const smartSeekFunc = httpsCallable<
         { videoId: string; query: string },
         { results: SmartSeekResult[] }
       >(functions, 'smartSeek');
       
+      // First try with existing segments
       const result = await smartSeekFunc({ videoId, query });
+      console.log('VideoService: SmartSeek result:', result.data);
+
+      // If no results and we have transcription, try searching in full text
+      if (result.data.results.length === 0) {
+        const videoDoc = await this.fetchVideoById(videoId);
+        if (videoDoc?.transcription) {
+          // Split transcription into sentences
+          const sentences = videoDoc.transcription.match(/[^.!?]+[.!?]+/g) || [];
+          const avgDuration = (videoDoc.duration || 60) / sentences.length;
+          
+          // Search in sentences
+          const results: SmartSeekResult[] = [];
+          sentences.forEach((sentence, index) => {
+            if (sentence.toLowerCase().includes(query.toLowerCase())) {
+              results.push({
+                timestamp: index * avgDuration,
+                confidence: 0.7,
+                context: sentence.trim(),
+              });
+            }
+          });
+          
+          console.log('VideoService: Found results in full transcription:', results);
+          return results;
+        }
+      }
+
       return result.data.results;
     } catch (error) {
-      console.error('Error performing smart seek:', error);
+      console.error('VideoService: Error in smartSeek:', error);
       throw error;
     }
   }

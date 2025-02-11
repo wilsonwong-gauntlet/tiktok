@@ -1288,7 +1288,7 @@ export const smartSeek = onCall(
     timeoutSeconds: 300,
     memory: "1GiB",
   },
-  async (request: CallableRequest<SmartSeekRequest>): Promise<{ results: SmartSeekResult[] }> => {
+  async (request: CallableRequest<SmartSeekRequest>): Promise<{results: SmartSeekResult[]}> => {
     try {
       logger.info("=== Starting smartSeek function ===");
 
@@ -1304,31 +1304,37 @@ export const smartSeek = onCall(
       }
 
       const videoData = videoDoc.data();
+      logger.info("Video data:", {
+        hasTranscriptionSegments: !!videoData?.transcriptionSegments,
+        transcriptionStatus: videoData?.transcriptionStatus,
+        segmentsCount: videoData?.transcriptionSegments?.length || 0,
+      });
+
       if (!videoData?.transcriptionSegments || videoData.transcriptionStatus !== "completed") {
         throw new Error("Video transcription is not available");
       }
 
-      // Get the API key and verify it's not empty
-      const apiKey = openaiApiKey.value();
-      if (!apiKey) {
-        throw new Error("OpenAI API key is not configured");
-      }
+      // Lower the confidence threshold for testing
+      const CONFIDENCE_THRESHOLD = 0.5; // Changed from 0.7 to 0.5
 
-      // Initialize OpenAI client
-      const openai = new OpenAI({apiKey});
+      // Process segments to find matches
+      const segments = videoData.transcriptionSegments as TranscriptionSegment[];
+      logger.info("Processing segments:", {
+        totalSegments: segments.length,
+        query,
+        firstSegment: segments[0],
+      });
 
       // Get embeddings for the query
+      const openai = new OpenAI({apiKey: openaiApiKey.value()});
       const queryEmbedding = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: query,
       });
 
-      // Process segments to find matches
-      const segments = videoData.transcriptionSegments as TranscriptionSegment[];
-      const results: SmartSeekResult[] = [];
-
       // Get embeddings for each segment in batches
       const batchSize = 20;
+      const results: SmartSeekResult[] = [];
       for (let i = 0; i < segments.length; i += batchSize) {
         const batch = segments.slice(i, i + batchSize);
         const segmentTexts = batch.map((s) => s.text);
@@ -1342,10 +1348,10 @@ export const smartSeek = onCall(
         batch.forEach((segment, index) => {
           const similarity = calculateCosineSimilarity(
             queryEmbedding.data[0].embedding,
-            segmentEmbeddings.data[index].embedding
+            segmentEmbeddings.data[index].embedding,
           );
 
-          if (similarity > 0.7) { // Confidence threshold
+          if (similarity > CONFIDENCE_THRESHOLD) {
             results.push({
               timestamp: segment.start,
               confidence: similarity,
@@ -1367,7 +1373,7 @@ export const smartSeek = onCall(
       logger.error("Error in smartSeek:", error);
       throw error;
     }
-  }
+  },
 );
 
 interface ChapterMarker {

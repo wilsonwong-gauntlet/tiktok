@@ -478,29 +478,92 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const handleSmartSeek = useCallback(async (query: string) => {
     if (!query.trim()) return;
     
+    // Add detailed transcription logging
+    console.log('🔍 Video Transcription Debug:', {
+      videoId: video.id,
+      transcriptionStatus: video.transcriptionStatus,
+      hasTranscription: !!video.transcription,
+      transcriptionLength: video.transcription?.length || 0,
+      hasSegments: !!video.transcriptionSegments,
+      segmentsCount: video.transcriptionSegments?.length || 0,
+      firstSegment: video.transcriptionSegments?.[0],
+      lastSegment: video.transcriptionSegments?.[video.transcriptionSegments?.length - 1],
+    });
+
+    console.log('🔍 SmartSeek Debug:', {
+      action: 'starting_search',
+      query,
+      videoId: video.id,
+      hasTranscription: !!video.transcription,
+      hasSegments: !!video.transcriptionSegments,
+      transcriptionStatus: video.transcriptionStatus
+    });
+
     setIsSearching(true);
     try {
+      console.log('🔍 Calling VideoService.smartSeek...');
       const results = await VideoService.smartSeek(video.id, query);
+      console.log('🔍 SmartSeek results:', {
+        success: true,
+        resultsCount: results.length,
+        results: results.map(r => ({
+          timestamp: r.timestamp,
+          confidence: r.confidence,
+          context: r.context.substring(0, 50) + '...' // First 50 chars for readability
+        }))
+      });
+      
+      if (results.length === 0) {
+        console.log('⚠️ No results found for query:', query);
+      }
+      
       setSearchResults(results);
     } catch (error) {
-      console.error('Smart seek error:', error);
+      console.error('🔴 Smart seek error:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        videoId: video.id,
+        query
+      });
     } finally {
       setIsSearching(false);
     }
-  }, [video.id]);
+  }, [video.id, video.transcription, video.transcriptionSegments, video.transcriptionStatus]);
 
   const handleSeekToResult = useCallback((timestamp: number) => {
+    console.log('🎯 Seeking to result:', {
+      timestamp,
+      formattedTime: formatTime(timestamp),
+      currentTime: player?.currentTime
+    });
+
     if (player && status === 'readyToPlay') {
       const boundedTime = Math.max(0, Math.min(timestamp, player.duration));
       const seekAmount = boundedTime - player.currentTime;
       
+      console.log('🎯 Seek details:', {
+        boundedTime,
+        seekAmount,
+        duration: player.duration
+      });
+
       if (Math.abs(seekAmount) > 0.5) {
         player.seekBy(seekAmount);
         setCurrentTime(boundedTime);
+        console.log('✅ Performed seek');
+      } else {
+        console.log('ℹ️ Seek skipped - too small change');
       }
+      
       // Clear search results after seeking
       setSearchResults([]);
       setSearchQuery('');
+    } else {
+      console.log('⚠️ Cannot seek:', {
+        hasPlayer: !!player,
+        status,
+        isReady: status === 'readyToPlay'
+      });
     }
   }, [player, status]);
 
@@ -587,8 +650,8 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             </ScrollView>
           )}
 
-          {/* Chapter Markers */}
-          <TouchableOpacity
+          {/* Temporarily disabled chapter markers and coaching prompts */}
+          {/* <TouchableOpacity
             style={styles.chaptersButton}
             onPress={() => setShowChapters(!showChapters)}
           >
@@ -619,7 +682,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          )}
+          )} */}
 
           <View style={styles.rightActions}>
             <ActionButton
@@ -701,12 +764,13 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         videoId={video.id}
       />
 
-      <MemoizedCoachingPrompts
+      {/* Temporarily disabled coaching prompts */}
+      {/* <MemoizedCoachingPrompts
         prompts={video.coachingPrompts || []}
         currentTime={timeRef.current}
         onGeneratePrompts={handleGeneratePrompts}
         isGenerating={isGeneratingPrompts}
-      />
+      /> */}
 
       <VideoProgressBar
         ref={videoProgressBarRef}
@@ -912,7 +976,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     position: 'absolute',
-    top: 60,
+    top: 120,
     left: 20,
     right: 70,
     flexDirection: 'row',
@@ -931,7 +995,7 @@ const styles = StyleSheet.create({
   },
   searchResults: {
     position: 'absolute',
-    top: 120,
+    top: 180,
     left: 20,
     right: 20,
     maxHeight: 200,
@@ -966,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   chaptersButton: {
     position: 'absolute',
-    top: 60,
+    top: 120,
     right: 20,
     width: 40,
     height: 40,
