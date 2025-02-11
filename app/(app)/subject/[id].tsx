@@ -24,6 +24,8 @@ import { db } from '../../../services/firebase';
 import QuizPanel from '../../../components/QuizPanel';
 import { getLastQuizAttempt } from '../../../services/firebase/learning';
 import Markdown from 'react-native-markdown-display';
+import VideoGrid from '../../../components/VideoGrid';
+import LearningPathView from '../../../components/LearningPathView';
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
@@ -155,6 +157,7 @@ export default function SubjectDetailScreen() {
   const [quizAttempts, setQuizAttempts] = useState<Record<string, QuizAttempt | null>>({});
   const [expandedReadingRows, setExpandedReadingRows] = useState<Set<string>>(new Set());
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [showLearningPath, setShowLearningPath] = useState(false);
 
   useEffect(() => {
     loadSubjectAndVideos();
@@ -1216,6 +1219,19 @@ export default function SubjectDetailScreen() {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.title}>{subject.name}</Text>
+        <TouchableOpacity
+          style={styles.pathToggle}
+          onPress={() => setShowLearningPath(!showLearningPath)}
+        >
+          <Ionicons
+            name={showLearningPath ? "school" : "school-outline"}
+            size={24}
+            color="#1a472a"
+          />
+          <Text style={styles.pathToggleText}>
+            {showLearningPath ? "View Videos" : "Learning Path"}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
@@ -1224,11 +1240,18 @@ export default function SubjectDetailScreen() {
           <Text style={styles.description}>{subject?.description}</Text>
         </View>
 
-        {renderSectionContent()}
+        {showLearningPath ? (
+          <LearningPathView subjectId={subject.id} />
+        ) : (
+          <VideoGrid subjectId={subject.id} />
+        )}
+                {renderSectionContent()}
+
       </View>
     </ScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -1887,12 +1910,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  videoTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
+
   videoDuration: {
     color: '#666',
     fontSize: 14,
@@ -1904,11 +1922,21 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 16,
   },
-  savedVideosSection: {
-    marginBottom: 24,
-  },
+
   savedVideoItem: {
     borderColor: '#1a472a',
     borderWidth: 1,
+  },
+  pathToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f9f7',
+    padding: 8,
+    borderRadius: 8,
+  },
+  pathToggleText: {
+    marginLeft: 8,
+    color: '#1a472a',
+    fontWeight: '500',
   },
 }); 

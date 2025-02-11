@@ -38,6 +38,19 @@ interface LocalVideoUpload {
   authorName: string;
 }
 
+interface SmartSeekResult {
+  timestamp: number;
+  confidence: number;
+  previewThumbnail?: string;
+  context: string;
+}
+
+interface ChapterMarker {
+  timestamp: number;
+  title: string;
+  summary: string;
+}
+
 async function updateStreak(userId: string) {
   try {
     console.log('🔥 Updating streak for user:', userId);
@@ -819,6 +832,45 @@ export class VideoService {
       }
     } catch (error) {
       console.error('Error marking video as completed:', error);
+      throw error;
+    }
+  }
+
+  static async smartSeek(videoId: string, query: string): Promise<SmartSeekResult[]> {
+    try {
+      const functions = getFunctions();
+      const smartSeekFunc = httpsCallable<
+        { videoId: string; query: string },
+        { results: SmartSeekResult[] }
+      >(functions, 'smartSeek');
+      
+      const result = await smartSeekFunc({ videoId, query });
+      return result.data.results;
+    } catch (error) {
+      console.error('Error performing smart seek:', error);
+      throw error;
+    }
+  }
+
+  static async generateChapterMarkers(videoId: string): Promise<ChapterMarker[]> {
+    try {
+      const functions = getFunctions();
+      const generateChapters = httpsCallable<
+        { videoId: string },
+        { chapters: ChapterMarker[] }
+      >(functions, 'generateChapterMarkers');
+      
+      const result = await generateChapters({ videoId });
+      
+      // Update video document with chapter markers
+      const videoRef = doc(db, VIDEOS_COLLECTION, videoId);
+      await updateDoc(videoRef, {
+        chapterMarkers: result.data.chapters
+      });
+      
+      return result.data.chapters;
+    } catch (error) {
+      console.error('Error generating chapter markers:', error);
       throw error;
     }
   }

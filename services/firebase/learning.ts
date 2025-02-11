@@ -10,36 +10,12 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
-  updateDoc
+  updateDoc,
+  limit
 } from 'firebase/firestore';
 import { db, auth } from './index';
-import { Note, Quiz, QuizAttempt, LearningConcept, RetentionPrompt } from '../../types/video';
-
-interface UserProgress {
-  userId: string;
-  subjects: {
-    [subjectId: string]: {
-      progress: number;
-      lastActivity: Timestamp;
-      completedVideos: string[];
-      masteredConcepts: string[];
-      quizScores: {
-        [quizId: string]: number;
-      };
-      reflections: string[];
-    };
-  };
-  streak: {
-    currentStreak: number;
-    lastActivityDate: Timestamp;
-    longestStreak: number;
-  };
-  totalStudyTime: number;
-  weeklyGoals: {
-    target: number;
-    achieved: number;
-  };
-}
+import { Note, Quiz, QuizAttempt, LearningConcept, RetentionPrompt, UserProgress, LearningPreferences, LearningPath, ConceptMastery, LearningPathNode } from '../../types/video';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // Notes
 export async function saveNote(
@@ -159,6 +135,15 @@ export async function saveQuizAttempt(
         weeklyGoals: {
           target: 10,
           achieved: 0
+        },
+        activeLearningPaths: {},
+        conceptMastery: {},
+        learningPreferences: {
+          preferredDuration: 10,  // Default to 10-minute videos
+          preferredDifficulty: 'beginner',
+          preferredLearningStyle: 'visual',
+          topicsOfInterest: [],
+          availableTimeSlots: []
         }
       };
       console.log('Created new user progress document');
@@ -489,5 +474,217 @@ export async function getConcept(conceptId: string): Promise<LearningConcept | n
   } catch (error) {
     console.error('Error getting concept:', error);
     throw error;
+  }
+}
+
+export class LearningService {
+  static async getUserProgress(userId: string): Promise<UserProgress | null> {
+    try {
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      const progressDoc = await getDoc(progressRef);
+      
+      if (!progressDoc.exists()) {
+        return null;
+      }
+
+      return progressDoc.data() as UserProgress;
+    } catch (error) {
+      console.error('Error getting user progress:', error);
+      throw error;
+    }
+  }
+
+  static async updateLearningPreferences(
+    userId: string,
+    preferences: LearningPreferences
+  ): Promise<void> {
+    try {
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      await updateDoc(progressRef, {
+        learningPreferences: preferences
+      });
+    } catch (error) {
+      console.error('Error updating learning preferences:', error);
+      throw error;
+    }
+  }
+
+  static async generateLearningPath(
+    userId: string,
+    subjectId: string
+  ): Promise<LearningPath> {
+    try {
+      const functions = getFunctions();
+      const generatePath = httpsCallable<
+        { userId: string; subjectId: string },
+        { path: LearningPath }
+      >(functions, 'generateLearningPath');
+      
+      const result = await generatePath({ userId, subjectId });
+      const path = result.data.path;
+      
+      // Save the generated path
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      await updateDoc(progressRef, {
+        [`activeLearningPaths.${subjectId}`]: path
+      });
+      
+      return path;
+    } catch (error) {
+      console.error('Error generating learning path:', error);
+      throw error;
+    }
+  }
+
+  static async updateConceptMastery(
+    userId: string,
+    conceptId: string,
+    update: Partial<ConceptMastery>
+  ): Promise<void> {
+    try {
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      await updateDoc(progressRef, {
+        [`conceptMastery.${conceptId}`]: update
+      });
+    } catch (error) {
+      console.error('Error updating concept mastery:', error);
+      throw error;
+    }
+  }
+
+  static async completePathNode(
+    userId: string,
+    subjectId: string,
+    nodeIndex: number,
+    score?: number
+  ): Promise<void> {
+    try {
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      const progressDoc = await getDoc(progressRef);
+      
+      if (!progressDoc.exists()) {
+        throw new Error('User progress not found');
+      }
+
+      const progress = progressDoc.data() as UserProgress;
+      const path = progress.activeLearningPaths[subjectId];
+      
+      if (!path) {
+        throw new Error('Learning path not found');
+      }
+
+      // Update node completion status
+      path.nodes[nodeIndex].completed = true;
+      if (score !== undefined) {
+        path.nodes[nodeIndex].score = score;
+      }
+
+      // Update path metrics
+      path.currentNodeIndex = nodeIndex + 1;
+      path.completionRate = path.nodes.filter(node => node.completed).length / path.nodes.length;
+      path.averageScore = path.nodes
+        .filter(node => node.score !== undefined)
+        .reduce((sum, node) => sum + (node.score || 0), 0) / 
+        path.nodes.filter(node => node.score !== undefined).length;
+      path.lastUpdated = new Date();
+
+      // Save updates
+      await updateDoc(progressRef, {
+        [`activeLearningPaths.${subjectId}`]: path
+      });
+
+      // If this was a review node, schedule next review
+      const completedNode = path.nodes[nodeIndex];
+      if (completedNode.type === 'review' && score !== undefined) {
+        const nextReview = this.calculateNextReviewDate(score);
+        await this.updateConceptMastery(userId, completedNode.requiredConcepts[0], {
+          lastReviewed: new Date(),
+          nextReviewDate: nextReview,
+          level: this.calculateNewMasteryLevel(score)
+        });
+      }
+    } catch (error) {
+      console.error('Error completing path node:', error);
+      throw error;
+    }
+  }
+
+  private static calculateNextReviewDate(score: number): Date {
+    // Implement spaced repetition algorithm
+    const now = new Date();
+    const baseInterval = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+    
+    // Adjust interval based on score
+    let multiplier = 1;
+    if (score >= 90) multiplier = 4;      // Review in 4 days
+    else if (score >= 70) multiplier = 2;  // Review in 2 days
+    else multiplier = 1;                   // Review tomorrow
+    
+    return new Date(now.getTime() + (baseInterval * multiplier));
+  }
+
+  private static calculateNewMasteryLevel(score: number): number {
+    // Simple mastery level calculation
+    // Score of 90+ increases level by 20
+    // Score of 70-89 increases level by 10
+    // Score below 70 decreases level by 10
+    // Clamp final value between 0-100
+    return Math.max(0, Math.min(100, score >= 90 ? 20 : score >= 70 ? 10 : -10));
+  }
+
+  static async getRecommendedVideos(userId: string): Promise<LearningPathNode[]> {
+    try {
+      const functions = getFunctions();
+      const getRecommendations = httpsCallable<
+        { userId: string },
+        { recommendations: LearningPathNode[] }
+      >(functions, 'getVideoRecommendations');
+      
+      const result = await getRecommendations({ userId });
+      return result.data.recommendations;
+    } catch (error) {
+      console.error('Error getting video recommendations:', error);
+      throw error;
+    }
+  }
+
+  static async getDueReviews(userId: string): Promise<LearningPathNode[]> {
+    try {
+      const progressRef = doc(db, 'users', userId, 'progress', 'learning');
+      const progressDoc = await getDoc(progressRef);
+      
+      if (!progressDoc.exists()) {
+        return [];
+      }
+
+      const progress = progressDoc.data() as UserProgress;
+      const now = new Date();
+      
+      // Get concepts due for review
+      const dueConcepts = Object.entries(progress.conceptMastery)
+        .filter(([_, mastery]) => mastery.nextReviewDate <= now)
+        .map(([conceptId, _]) => conceptId);
+      
+      if (dueConcepts.length === 0) {
+        return [];
+      }
+
+      // Get review nodes for due concepts
+      const functions = getFunctions();
+      const getReviewNodes = httpsCallable<
+        { userId: string; conceptIds: string[] },
+        { reviewNodes: LearningPathNode[] }
+      >(functions, 'getReviewNodes');
+      
+      const result = await getReviewNodes({ 
+        userId,
+        conceptIds: dueConcepts
+      });
+      
+      return result.data.reviewNodes;
+    } catch (error) {
+      console.error('Error getting due reviews:', error);
+      throw error;
+    }
   }
 } 

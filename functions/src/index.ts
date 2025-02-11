@@ -1268,3 +1268,368 @@ export const generateCoachingPrompts = onCall(
     }
   },
 );
+
+interface SmartSeekResult {
+  timestamp: number;
+  confidence: number;
+  previewThumbnail?: string;
+  context: string;
+}
+
+interface SmartSeekRequest {
+  videoId: string;
+  query: string;
+}
+
+export const smartSeek = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<SmartSeekRequest>): Promise<{ results: SmartSeekResult[] }> => {
+    try {
+      logger.info("=== Starting smartSeek function ===");
+
+      const {videoId, query} = request.data;
+      if (!videoId || !query) {
+        throw new Error("Missing required parameters: videoId and query");
+      }
+
+      // Get video document
+      const videoDoc = await admin.firestore().collection("videos").doc(videoId).get();
+      if (!videoDoc.exists) {
+        throw new Error("Video not found");
+      }
+
+      const videoData = videoDoc.data();
+      if (!videoData?.transcriptionSegments || videoData.transcriptionStatus !== "completed") {
+        throw new Error("Video transcription is not available");
+      }
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        throw new Error("OpenAI API key is not configured");
+      }
+
+      // Initialize OpenAI client
+      const openai = new OpenAI({apiKey});
+
+      // Get embeddings for the query
+      const queryEmbedding = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: query,
+      });
+
+      // Process segments to find matches
+      const segments = videoData.transcriptionSegments as TranscriptionSegment[];
+      const results: SmartSeekResult[] = [];
+
+      // Get embeddings for each segment in batches
+      const batchSize = 20;
+      for (let i = 0; i < segments.length; i += batchSize) {
+        const batch = segments.slice(i, i + batchSize);
+        const segmentTexts = batch.map((s) => s.text);
+
+        const segmentEmbeddings = await openai.embeddings.create({
+          model: "text-embedding-3-small",
+          input: segmentTexts,
+        });
+
+        // Calculate similarity scores
+        batch.forEach((segment, index) => {
+          const similarity = calculateCosineSimilarity(
+            queryEmbedding.data[0].embedding,
+            segmentEmbeddings.data[index].embedding
+          );
+
+          if (similarity > 0.7) { // Confidence threshold
+            results.push({
+              timestamp: segment.start,
+              confidence: similarity,
+              context: segment.text,
+              // Could generate thumbnails here if needed
+            });
+          }
+        });
+      }
+
+      // Sort by confidence and take top 5
+      const topResults = results
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 5);
+
+      logger.info("=== Successfully completed smartSeek function ===");
+      return {results: topResults};
+    } catch (error) {
+      logger.error("Error in smartSeek:", error);
+      throw error;
+    }
+  }
+);
+
+interface ChapterMarker {
+  timestamp: number;
+  title: string;
+  summary: string;
+}
+
+interface GenerateChapterMarkersRequest {
+  videoId: string;
+}
+
+export const generateChapterMarkers = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateChapterMarkersRequest>): Promise<{ chapters: ChapterMarker[] }> => {
+    try {
+      logger.info("=== Starting generateChapterMarkers function ===");
+
+      const {videoId} = request.data;
+      if (!videoId) {
+        throw new Error("Missing required parameter: videoId");
+      }
+
+      // Get video document
+      const videoDoc = await admin.firestore().collection("videos").doc(videoId).get();
+      if (!videoDoc.exists) {
+        throw new Error("Video not found");
+      }
+
+      const videoData = videoDoc.data();
+      if (!videoData?.transcriptionSegments || videoData.transcriptionStatus !== "completed") {
+        throw new Error("Video transcription is not available");
+      }
+
+      const segments = videoData.transcriptionSegments as TranscriptionSegment[];
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        throw new Error("OpenAI API key is not configured");
+      }
+
+      // Initialize OpenAI client
+      const openai = new OpenAI({apiKey});
+
+      // Analyze transcript to identify major topic changes
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert at analyzing educational content and identifying logical chapter breaks. Create 4-6 chapters that help organize the content in a meaningful way.",
+          },
+          {
+            role: "user",
+            content: `Analyze this video transcript and identify major topic transitions. Create chapters with timestamps.
+            
+            Transcript:
+            ${segments.map((s) => `[${s.start}] ${s.text}`).join("\n")}
+            
+            Return the chapters in this JSON format:
+            {
+              "chapters": [
+                {
+                  "timestamp": number,
+                  "title": "string",
+                  "summary": "string"
+                }
+              ]
+            }`,
+          },
+        ],
+        temperature: 0.7,
+        response_format: {type: "json_object"},
+      });
+
+      const response = JSON.parse(completion.choices[0].message.content || "{}");
+      const chapters = response.chapters as ChapterMarker[];
+
+      if (!chapters || !Array.isArray(chapters) || chapters.length === 0) {
+        throw new Error("Failed to generate valid chapter markers");
+      }
+
+      // Store chapters in Firestore
+      await videoDoc.ref.update({
+        chapterMarkers: chapters,
+        chaptersGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      logger.info("=== Successfully completed generateChapterMarkers function ===");
+      return {chapters};
+    } catch (error) {
+      logger.error("Error in generateChapterMarkers:", error);
+      throw error;
+    }
+  }
+);
+
+interface LearningPathNode {
+  videoId: string;
+  type: "core" | "practice" | "review" | "challenge";
+  requiredConcepts: string[];
+  estimatedDuration: number;
+  difficulty: number;
+  completed: boolean;
+  score?: number;
+  nextReviewDate?: Date;
+}
+
+interface LearningPath {
+  userId: string;
+  subjectId: string;
+  nodes: LearningPathNode[];
+  currentNodeIndex: number;
+  lastUpdated: Date;
+  completionRate: number;
+  averageScore: number;
+}
+
+interface GenerateLearningPathRequest {
+  userId: string;
+  subjectId: string;
+}
+
+export const generateLearningPath = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "1GiB",
+  },
+  async (request: CallableRequest<GenerateLearningPathRequest>): Promise<{ path: LearningPath }> => {
+    try {
+      logger.info("=== Starting generateLearningPath function ===");
+
+      const {userId, subjectId} = request.data;
+      if (!userId || !subjectId) {
+        throw new Error("Missing required parameters: userId and subjectId");
+      }
+
+      // Get user's progress and preferences
+      const userProgressDoc = await admin.firestore()
+        .collection("users")
+        .doc(userId)
+        .collection("progress")
+        .doc("learning")
+        .get();
+
+      const userProgress = userProgressDoc.data();
+      if (!userProgress) {
+        throw new Error("User progress not found");
+      }
+
+      // Get subject details and available videos
+      const subjectDoc = await admin.firestore().collection("subjects").doc(subjectId).get();
+      if (!subjectDoc.exists) {
+        throw new Error("Subject not found");
+      }
+
+      const subject = subjectDoc.data();
+      const videosSnapshot = await admin.firestore()
+        .collection("videos")
+        .where("subjectId", "==", subjectId)
+        .get();
+
+      const videos = videosSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Get the API key and verify it's not empty
+      const apiKey = openaiApiKey.value();
+      if (!apiKey) {
+        throw new Error("OpenAI API key is not configured");
+      }
+
+      // Initialize OpenAI client
+      const openai = new OpenAI({apiKey});
+
+      // Generate personalized learning path
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert educational planner. Create a personalized learning path that adapts to the user's progress, preferences, and learning style.",
+          },
+          {
+            role: "user",
+            content: `Create a learning path for this subject using available videos.
+            
+            Subject: ${JSON.stringify(subject)}
+            Available Videos: ${JSON.stringify(videos)}
+            User Progress: ${JSON.stringify(userProgress)}
+            
+            Return the path in this JSON format:
+            {
+              "nodes": [
+                {
+                  "videoId": "string",
+                  "type": "core" | "practice" | "review" | "challenge",
+                  "requiredConcepts": ["string"],
+                  "estimatedDuration": number,
+                  "difficulty": number
+                }
+              ]
+            }`,
+          },
+        ],
+        temperature: 0.7,
+        response_format: {type: "json_object"},
+      });
+
+      const response = JSON.parse(completion.choices[0].message.content || "{}");
+      const nodes = response.nodes as Omit<LearningPathNode, "completed" | "score" | "nextReviewDate">[];
+
+      if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
+        throw new Error("Failed to generate valid learning path");
+      }
+
+      // Create learning path with initial state
+      const path: LearningPath = {
+        userId,
+        subjectId,
+        nodes: nodes.map((node) => ({
+          ...node,
+          completed: false,
+        })),
+        currentNodeIndex: 0,
+        lastUpdated: new Date(),
+        completionRate: 0,
+        averageScore: 0,
+      };
+
+      // Store path in user's progress
+      await userProgressDoc.ref.update({
+        [`activeLearningPaths.${subjectId}`]: path,
+      });
+
+      logger.info("=== Successfully completed generateLearningPath function ===");
+      return {path};
+    } catch (error) {
+      logger.error("Error in generateLearningPath:", error);
+      throw error;
+    }
+  }
+);
+
+/**
+ * Calculates the cosine similarity between two vectors.
+ * @param {number[]} vec1 - The first vector
+ * @param {number[]} vec2 - The second vector
+ * @return {number} The cosine similarity between the vectors
+ */
+function calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
+  const dotProduct = vec1.reduce((acc, val, i) => acc + val * vec2[i], 0);
+  const norm1 = Math.sqrt(vec1.reduce((acc, val) => acc + val * val, 0));
+  const norm2 = Math.sqrt(vec2.reduce((acc, val) => acc + val * val, 0));
+  return dotProduct / (norm1 * norm2);
+}

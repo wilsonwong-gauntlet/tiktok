@@ -58,6 +58,19 @@ export interface CoachingPrompt {
   type: 'reflection' | 'action' | 'connection';
 }
 
+export interface SmartSeekResult {
+  timestamp: number;
+  confidence: number;
+  previewThumbnail?: string;
+  context: string;
+}
+
+export interface ChapterMarker {
+  timestamp: number;
+  title: string;
+  summary: string;
+}
+
 export interface Video {
   id: string;
   title: string;
@@ -91,6 +104,7 @@ export interface Video {
   quiz?: Quiz;
   coachingPrompts?: CoachingPrompt[];
   promptsGeneratedAt?: Date;
+  chapterMarkers?: ChapterMarker[];
 }
 
 export interface FurtherReading {
@@ -232,6 +246,13 @@ export interface UserProgress {
     target: number;
     achieved: number;
   };
+  conceptMastery: {
+    [conceptId: string]: ConceptMastery;
+  };
+  learningPreferences: LearningPreferences;
+  activeLearningPaths: {
+    [subjectId: string]: LearningPath;
+  };
 }
 
 export interface CommentSummary {
@@ -241,4 +262,47 @@ export interface CommentSummary {
   sentiment: string;
   lastUpdated: Date;
   commentCount: number;
+}
+
+export interface ConceptMastery {
+  conceptId: string;
+  level: number;  // 0-100
+  lastReviewed: Date;
+  nextReviewDate: Date;
+  strengthByTopic: {
+    [topicId: string]: number;  // 0-100
+  };
+}
+
+export interface LearningPreferences {
+  preferredDuration: number;  // in minutes
+  preferredDifficulty: 'beginner' | 'intermediate' | 'advanced';
+  preferredLearningStyle: 'visual' | 'auditory' | 'reading' | 'kinesthetic';
+  topicsOfInterest: string[];
+  availableTimeSlots: {
+    dayOfWeek: number;  // 0-6
+    startHour: number;  // 0-23
+    endHour: number;    // 0-23
+  }[];
+}
+
+export interface LearningPathNode {
+  videoId: string;
+  type: 'core' | 'practice' | 'review' | 'challenge';
+  requiredConcepts: string[];
+  estimatedDuration: number;
+  difficulty: number;  // 0-100
+  completed: boolean;
+  score?: number;
+  nextReviewDate?: Date;
+}
+
+export interface LearningPath {
+  userId: string;
+  subjectId: string;
+  nodes: LearningPathNode[];
+  currentNodeIndex: number;
+  lastUpdated: Date;
+  completionRate: number;
+  averageScore: number;
 } 

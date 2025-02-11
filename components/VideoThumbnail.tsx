@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Image, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Image, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Video } from '../types/video';
 
 interface VideoThumbnailProps {
   video: Video;
+  onPress?: () => void;
 }
 
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
@@ -11,9 +12,13 @@ const THUMBNAIL_ASPECT_RATIO = 16 / 9;
 const THUMBNAIL_WIDTH = WINDOW_WIDTH - 32; // Full width minus padding
 const THUMBNAIL_HEIGHT = THUMBNAIL_WIDTH / THUMBNAIL_ASPECT_RATIO;
 
-export default function VideoThumbnail({ video }: VideoThumbnailProps) {
+export default function VideoThumbnail({ video, onPress }: VideoThumbnailProps) {
   return (
-    <View style={styles.container}>
+    <TouchableOpacity 
+      style={styles.container}
+      onPress={onPress}
+      disabled={!onPress}
+    >
       <Image
         source={{ uri: video.thumbnailUrl }}
         style={styles.thumbnail}
@@ -24,7 +29,7 @@ export default function VideoThumbnail({ video }: VideoThumbnailProps) {
           {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
