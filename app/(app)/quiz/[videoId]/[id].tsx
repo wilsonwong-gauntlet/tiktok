@@ -112,7 +112,7 @@ export default function QuizDetailsScreen() {
               <Text style={styles.scoreLabel}>Score</Text>
               <Text style={[
                 styles.scoreValue,
-                { color: quiz.lastAttempt.score >= 70 ? '#4CAF50' : '#ff4444' }
+                { color: quiz.lastAttempt.score >= 70 ? '#6B21A8' : '#ff4444' }
               ]}>
                 {Math.round(quiz.lastAttempt.score)}%
               </Text>

@@ -951,10 +951,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   correctOption: {
-    backgroundColor: 'rgba(26, 71, 42, 0.8)', // Keeping green but making it slightly transparent
+    backgroundColor: 'rgba(107, 33, 168, 0.15)', // Obsidian purple with transparency
   },
   incorrectOption: {
-    backgroundColor: 'rgba(255, 68, 68, 0.8)', // Adding red with transparency for wrong answers
+    backgroundColor: 'rgba(255, 68, 68, 0.8)', // Red with transparency for wrong answers
   },
   optionText: {
     color: '#fff',
