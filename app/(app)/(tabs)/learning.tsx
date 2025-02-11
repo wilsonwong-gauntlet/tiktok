@@ -13,7 +13,7 @@ import QuizList from '../../../components/QuizList';
 import NotesList from '../../../components/NotesList';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
-type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights' | 'flashcards' | 'achievements';
+type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
 
 interface CachedData {
   readings: {
@@ -53,15 +53,11 @@ interface CachedData {
     savedAt: Date;
     videoTitle?: string;
   }[];
-  flashcards: any[]; // Add placeholder for new tab
-  achievements: any[]; // Add placeholder for new tab
   lastFetched: {
     readings?: number;
     quizzes?: number;
     notes?: number;
     insights?: number;
-    flashcards?: number;
-    achievements?: number;
   };
 }
 
@@ -78,8 +74,6 @@ export default function LearningScreen() {
     quizzes: [],
     notes: [],
     insights: [],
-    flashcards: [],
-    achievements: [],
     lastFetched: {},
   });
 
@@ -142,9 +136,7 @@ export default function LearningScreen() {
       reading: 'readings',
       quizzes: 'quizzes',
       notes: 'notes',
-      insights: 'insights',
-      flashcards: 'flashcards',
-      achievements: 'achievements'
+      insights: 'insights'
     } as const;
     
     // Check if we have valid cached data
@@ -484,8 +476,6 @@ export default function LearningScreen() {
             { id: 'reading', icon: 'book-outline', label: 'Reading' },
             { id: 'quizzes', icon: 'school-outline', label: 'Quizzes' },
             { id: 'notes', icon: 'document-text-outline', label: 'Notes' },
-            { id: 'flashcards', icon: 'albums-outline', label: 'Flashcards' },
-            { id: 'achievements', icon: 'trophy-outline', label: 'Achievements' }
           ].map(item => (
             <TouchableOpacity
               key={item.id}
