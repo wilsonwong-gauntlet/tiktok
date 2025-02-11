@@ -138,7 +138,7 @@ export default function NoteDetailsScreen() {
             <Text style={styles.sectionTitle}>Key Takeaways</Text>
             {note.keyTakeaways.map((takeaway, index) => (
               <View key={index} style={styles.takeawayCard}>
-                <Ionicons name="bulb-outline" size={20} color="#1a472a" />
+                <Ionicons name="bulb-outline" size={20} color="#9580FF" />
                 <Text style={styles.takeawayText}>{takeaway}</Text>
               </View>
             ))}
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     padding: 16,
     borderRadius: 12,
     gap: 8,

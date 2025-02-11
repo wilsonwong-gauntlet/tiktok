@@ -98,9 +98,9 @@ const VideoProgressBar = memo(React.forwardRef(({ currentTime, duration, onSeek,
         value={isScrubbing ? scrubPosition : currentTime}
         minimumValue={0}
         maximumValue={duration}
-        minimumTrackTintColor="#1a472a"
+        minimumTrackTintColor="#9580FF"
         maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
-        thumbTintColor="#1a472a"
+        thumbTintColor="#9580FF"
         onSlidingStart={(value: number) => {
           setIsScrubbing(true);
           setScrubPosition(value);
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     opacity: 0.5,
   },
   actionText: {
@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   resultTimestamp: {
-    color: '#1a472a',
+    color: '#9580FF',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 4,
@@ -1004,7 +1004,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   chapterTimestamp: {
-    color: '#1a472a',
+    color: '#9580FF',
     fontSize: 14,
     fontWeight: '600',
     marginRight: 12,

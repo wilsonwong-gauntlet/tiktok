@@ -49,7 +49,7 @@ const markdownStyles = {
     fontStyle: 'italic',
   },
   link: {
-    color: '#1a472a',
+    color: '#9580FF',
     textDecorationLine: 'underline',
   },
   list_item: {

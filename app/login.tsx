@@ -36,7 +36,7 @@ export default function Login() {
         style={styles.content}
       >
         <View style={styles.logoContainer}>
-          <Ionicons name="school" size={64} color="#1a472a" />
+          <Ionicons name="school" size={64} color="#9580FF" />
           <Text style={styles.title}>EduVision</Text>
           <Text style={styles.subtitle}>Learn through video, master through practice</Text>
         </View>
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   button: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   signUpButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#1a472a',
+    borderColor: '#9580FF',
   },
   buttonText: {
     color: '#fff',

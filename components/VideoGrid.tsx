@@ -48,7 +48,7 @@ export default function VideoGrid({ subjectId }: VideoGridProps) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1a472a" />
+        <ActivityIndicator size="large" color="#9580FF" />
       </View>
     );
   }

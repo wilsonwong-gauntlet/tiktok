@@ -20,7 +20,6 @@ export default function ProfileScreen() {
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
           <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>Your learning journey</Text>
         </View>
 
         <View style={styles.userInfo}>
@@ -53,11 +52,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 5,
   },
   userInfo: {
     alignItems: 'center',
