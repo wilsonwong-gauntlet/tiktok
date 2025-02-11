@@ -120,8 +120,10 @@ export async function saveQuizAttempt(
   subjectId: string
 ) {
   try {
+    console.log('Saving quiz attempt:', { userId, quizId, score, videoId, subjectId });
+    const attemptId = `${quizId}_${Date.now()}`;
     const attempt: QuizAttempt = {
-      id: `${quizId}_${Date.now()}`,
+      id: attemptId,
       userId,
       quizId,
       answers,
@@ -129,15 +131,17 @@ export async function saveQuizAttempt(
       completedAt: new Date()
     };
 
-    // Save the quiz attempt
+    // Save the quiz attempt with a unique ID
     await setDoc(
-      doc(db, 'users', userId, 'quizAttempts', quizId),
+      doc(db, 'users', userId, 'quizAttempts', attemptId),
       attempt
     );
+    console.log('Saved quiz attempt document');
 
     // Get or create user progress document
     const userProgressRef = doc(db, 'users', userId, 'progress', 'learning');
     const userProgressDoc = await getDoc(userProgressRef);
+    console.log('Current user progress:', userProgressDoc.data());
     
     let userProgress: UserProgress;
     if (userProgressDoc.exists()) {
@@ -157,6 +161,7 @@ export async function saveQuizAttempt(
           achieved: 0
         }
       };
+      console.log('Created new user progress document');
     }
 
     // Update subject progress
@@ -169,15 +174,18 @@ export async function saveQuizAttempt(
         quizScores: {},
         reflections: []
       };
+      console.log('Initialized new subject progress');
     }
 
     // Update quiz scores and last activity
-    userProgress.subjects[subjectId].quizScores[quizId] = score;
+    userProgress.subjects[subjectId].quizScores[attemptId] = score;
     userProgress.subjects[subjectId].lastActivity = Timestamp.fromDate(new Date());
+    console.log('Updated quiz scores:', userProgress.subjects[subjectId].quizScores);
 
     // Add video to completed videos if not already there
     if (!userProgress.subjects[subjectId].completedVideos.includes(videoId)) {
       userProgress.subjects[subjectId].completedVideos.push(videoId);
+      console.log('Added video to completed videos');
     }
 
     // Calculate overall subject progress
@@ -185,9 +193,11 @@ export async function saveQuizAttempt(
     const totalQuizzes = Object.keys(subjectProgress.quizScores).length;
     const totalScore = Object.values(subjectProgress.quizScores).reduce((sum, score) => sum + score, 0);
     subjectProgress.progress = Math.round((totalScore / totalQuizzes) * 100) / 100;
+    console.log('Calculated subject progress:', subjectProgress.progress);
 
     // Save updated progress
     await setDoc(userProgressRef, userProgress);
+    console.log('Saved updated user progress');
 
     return attempt;
   } catch (error) {

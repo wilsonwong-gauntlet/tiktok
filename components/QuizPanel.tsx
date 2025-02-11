@@ -74,6 +74,10 @@ export default function QuizPanel({ quiz, videoId, subjectId, onComplete }: Quiz
             videoId,
             subjectId
           );
+          // Refresh learning data after saving quiz attempt
+          if (typeof window !== 'undefined' && (window as any).refreshLearningData) {
+            (window as any).refreshLearningData();
+          }
         } catch (error) {
           console.error('Error saving quiz attempt:', error);
         }

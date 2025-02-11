@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Subject, UserProgress, FurtherReading, Quiz, QuizAttempt, Note, QuizQuestion } from '../../../types/video';
+import { Subject, UserProgress, FurtherReading, Quiz, QuizAttempt, Note, QuizQuestion, Video } from '../../../types/video';
 import { auth, db } from '../../../services/firebase';
 import { VideoService } from '../../../services/firebase/video';
 import { SubjectService } from '../../../services/firebase/subjects';
@@ -13,7 +13,7 @@ import QuizList from '../../../components/QuizList';
 import NotesList from '../../../components/NotesList';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
-type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
+type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights' | 'flashcards' | 'achievements';
 
 interface CachedData {
   readings: {
@@ -53,11 +53,15 @@ interface CachedData {
     savedAt: Date;
     videoTitle?: string;
   }[];
+  flashcards: any[]; // Add placeholder for new tab
+  achievements: any[]; // Add placeholder for new tab
   lastFetched: {
     readings?: number;
     quizzes?: number;
     notes?: number;
     insights?: number;
+    flashcards?: number;
+    achievements?: number;
   };
 }
 
@@ -67,14 +71,29 @@ export default function LearningScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [activeSubjects, setActiveSubjects] = useState<Subject[]>([]);
+  const [videos, setVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [cachedData, setCachedData] = useState<CachedData>({
     readings: {},
     quizzes: [],
     notes: [],
     insights: [],
+    flashcards: [],
+    achievements: [],
     lastFetched: {},
   });
+
+  // Expose refresh function globally
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).refreshLearningData = loadInitialData;
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).refreshLearningData;
+      }
+    };
+  }, []);
 
   // Load initial data
   useEffect(() => {
@@ -91,13 +110,20 @@ export default function LearningScreen() {
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
-      const [progressData, subjects] = await Promise.all([
+      console.log('Loading initial data...');
+      const [progressData, subjects, videosData] = await Promise.all([
         SubjectService.getUserProgress(auth.currentUser!.uid),
         SubjectService.getActiveSubjects(auth.currentUser!.uid),
+        VideoService.fetchVideos(),
       ]);
+
+      console.log('User Progress Data:', progressData);
+      console.log('Active Subjects:', subjects);
+      console.log('Videos Data:', videosData);
 
       setUserProgress(progressData);
       setActiveSubjects(subjects);
+      setVideos(videosData.videos);
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -116,7 +142,9 @@ export default function LearningScreen() {
       reading: 'readings',
       quizzes: 'quizzes',
       notes: 'notes',
-      insights: 'insights'
+      insights: 'insights',
+      flashcards: 'flashcards',
+      achievements: 'achievements'
     } as const;
     
     // Check if we have valid cached data
@@ -313,25 +341,6 @@ export default function LearningScreen() {
     </View>
   );
 
-  const renderTab = (tab: Tab, label: string, icon: string) => (
-    <TouchableOpacity
-      style={[styles.tab, activeTab === tab && styles.activeTab]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <View style={styles.tabContent}>
-        <Ionicons 
-          name={icon as any} 
-          size={20} 
-          color={activeTab === tab ? '#fff' : '#666'} 
-        />
-        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-          {label}
-        </Text>
-      </View>
-      {activeTab === tab && <View style={styles.activeIndicator} />}
-    </TouchableOpacity>
-  );
-
   const renderOverviewTab = () => (
     <ScrollView style={styles.scrollView}>
       <TouchableOpacity style={styles.streakBanner}>
@@ -375,19 +384,19 @@ export default function LearningScreen() {
                 </View>
                 <View style={styles.subjectStats}>
                   <View style={styles.statItem}>
-                    <Ionicons name="play-circle" size={16} color="#1a472a" />
+                    <Ionicons name="play-circle" size={16} color="#9580FF" />
                     <Text style={styles.subjectStat}>
-                      {subject.completedVideos} videos
+                      {subject.completedVideos} videos watched
                     </Text>
                   </View>
-                  {userProgress?.subjects[subject.id]?.quizScores && (
-                    <View style={styles.statItem}>
-                      <Ionicons name="school" size={16} color="#1a472a" />
-                      <Text style={styles.subjectStat}>
-                        {Object.keys(userProgress.subjects[subject.id].quizScores).length} quizzes
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.statItem}>
+                    <Ionicons name="school" size={16} color="#9580FF" />
+                    <Text style={styles.subjectStat}>
+                      {userProgress?.subjects?.[subject.id]?.quizScores ? 
+                        new Set(Object.keys(userProgress.subjects[subject.id].quizScores)
+                          .map(attemptId => attemptId.split('_')[0])).size : 0} quizzes completed
+                    </Text>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
@@ -463,12 +472,41 @@ export default function LearningScreen() {
         <Text style={styles.title}>My Learning</Text>
       </View>
 
-      <View style={styles.tabBar}>
-        {renderTab('overview', 'Overview', 'home-outline')}
-        {renderTab('insights', 'Insights', 'analytics-outline')}
-        {renderTab('reading', 'Reading', 'book-outline')}
-        {renderTab('quizzes', 'Quizzes', 'school-outline')}
-        {renderTab('notes', 'Notes', 'document-text-outline')}
+      <View style={styles.navigation}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.navContent}
+        >
+          {[
+            { id: 'overview', icon: 'home-outline', label: 'Overview' },
+            { id: 'insights', icon: 'analytics-outline', label: 'Insights' },
+            { id: 'reading', icon: 'book-outline', label: 'Reading' },
+            { id: 'quizzes', icon: 'school-outline', label: 'Quizzes' },
+            { id: 'notes', icon: 'document-text-outline', label: 'Notes' },
+            { id: 'flashcards', icon: 'albums-outline', label: 'Flashcards' },
+            { id: 'achievements', icon: 'trophy-outline', label: 'Achievements' }
+          ].map(item => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.navItem, activeTab === item.id && styles.activeNavItem]}
+              onPress={() => setActiveTab(item.id as Tab)}
+            >
+              <Ionicons 
+                name={item.icon as any} 
+                size={18} 
+                color={activeTab === item.id ? '#9580FF' : '#999'} 
+                style={styles.navIcon}
+              />
+              <Text style={[
+                styles.navLabel,
+                activeTab === item.id && styles.activeNavLabel
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.contentContainer}>
@@ -494,38 +532,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  tabBar: {
-    flexDirection: 'row',
+  navigation: {
+    backgroundColor: '#111',
+    paddingTop: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    position: 'relative',
+  navContent: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  tabContent: {
+  navItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#111',
   },
-  activeTab: {
-    backgroundColor: 'transparent',
+  activeNavItem: {
+    backgroundColor: 'rgba(149, 128, 255, 0.15)',
   },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#1a472a',
+  navIcon: {
+    marginRight: 6,
   },
-  tabText: {
-    color: '#666',
-    fontSize: 12,
-    textAlign: 'center',
+  navLabel: {
+    color: '#999',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  activeTabText: {
-    color: '#fff',
+  activeNavLabel: {
+    color: '#9580FF',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -570,7 +609,7 @@ const styles = StyleSheet.create({
   },
   subjectStat: {
     fontSize: 14,
-    color: '#1a472a',
+    color: '#9580FF',
     fontWeight: '600',
   },
   placeholder: {
@@ -585,7 +624,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   browseButton: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -614,7 +653,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#1a472a',
+    backgroundColor: '#9580FF',
   },
   streakBanner: {
     marginHorizontal: 16,
