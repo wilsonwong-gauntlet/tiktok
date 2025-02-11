@@ -28,7 +28,7 @@ export default function ReadingList({ readings = [], loading = false }: ReadingL
   const renderReadingRow = ({ item: reading }: { item: ReadingItem }) => (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => router.push(`/video/${reading.videoId}?highlight=reading`)}
+      onPress={() => router.push(`/reading/${encodeURIComponent(reading.resource.title)}?videoId=${reading.videoId}`)}
     >
       <View style={styles.rowContent}>
         <View style={styles.rowHeader}>
@@ -59,6 +59,9 @@ export default function ReadingList({ readings = [], loading = false }: ReadingL
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Reading Materials ({readings.length})</Text>
+      </View>
       <FlatList
         data={readings}
         renderItem={renderReadingRow}
@@ -130,5 +133,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     padding: 16,
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
 }); 

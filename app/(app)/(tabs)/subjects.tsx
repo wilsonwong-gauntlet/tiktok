@@ -244,7 +244,6 @@ export default function SubjectsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Explore</Text>
-        <Text style={styles.subtitle}>Choose a subject to begin your learning journey</Text>
       </View>
 
       <ScrollView 

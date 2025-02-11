@@ -22,6 +22,7 @@ interface Note {
   content: string;
   timestamp: number;
   createdAt: Date;
+  title?: string;
 }
 
 interface NotesListProps {
@@ -33,6 +34,7 @@ interface NotesListProps {
     content: string;
     timestamp: number;
     createdAt: Date;
+    title?: string;
   }[];
   loading: boolean;
 }
@@ -67,7 +69,7 @@ export default function NotesList({ cachedNotes, loading }: NotesListProps) {
           <View style={styles.rowLeft}>
             <Ionicons name="document-text-outline" size={16} color="#666" />
             <Text style={styles.noteText} numberOfLines={2}>
-              {note.content}
+              {note.videoTitle}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#666" />
@@ -94,6 +96,9 @@ export default function NotesList({ cachedNotes, loading }: NotesListProps) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Saved Notes ({cachedNotes.length})</Text>
+      </View>
       <FlatList
         data={cachedNotes}
         renderItem={renderNoteRow}
@@ -179,5 +184,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
 }); 

@@ -92,7 +92,8 @@ export default function QuizDetailsScreen() {
 
       <ScrollView style={styles.content}>
         <View style={styles.quizHeader}>
-          <Text style={styles.quizTitle}>{quiz.questions.length} Questions Quiz</Text>
+          <Text style={styles.quizTitle}>{quiz.videoTitle}</Text>
+          <Text style={styles.quizSubtitle}>{quiz.questions.length} Questions</Text>
           <View style={styles.tags}>
             <View style={styles.tag}>
               <Ionicons name="school-outline" size={16} color="#666" />
@@ -180,6 +181,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+    marginBottom: 16,
+  },
+  quizSubtitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
     marginBottom: 16,
   },
   tags: {

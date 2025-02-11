@@ -457,7 +457,7 @@ export default function LearningPanel({
         </View>
         <View style={styles.inputContainer}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { minHeight: 120 }]}
             multiline
             placeholder="Capture your thoughts..."
             placeholderTextColor="#666"

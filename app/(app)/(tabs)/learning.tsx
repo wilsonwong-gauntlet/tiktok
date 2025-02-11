@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -354,68 +354,42 @@ export default function LearningScreen() {
   );
 
   const renderOverviewTab = () => (
-    <ScrollView style={styles.scrollView}>
-      <TouchableOpacity style={styles.streakBanner}>
-        <View style={styles.streakContent}>
-          <Ionicons name="flame" size={28} color="#ff9500" />
-          <View>
-            <Text style={styles.streakCount}>
-              {userProgress?.streak?.currentStreak || 0} day streak!
-            </Text>
-            {(userProgress?.streak?.currentStreak || 0) >= 7 && (
-              <Text style={styles.streakSubtext}>You're on fire! 🔥</Text>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Active Subjects</Text>
-        {isLoading ? (
-          <View style={styles.subjectsList}>
-            {[1, 2, 3].map((_, index) => (
-              <View key={index} style={[styles.subjectCard, styles.skeletonCard]}>
-                <View style={styles.skeletonTitle} />
-                <View style={styles.subjectStats}>
-                  <View style={[styles.skeletonStat, { width: 80 }]} />
-                  <View style={[styles.skeletonStat, { width: 60 }]} />
+    <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Active Subjects ({activeSubjects.length})</Text>
+      </View>
+      <FlatList
+        data={activeSubjects}
+        renderItem={({ item: subject }) => (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => router.push(`/subject/${subject.id}`)}
+          >
+            <View style={styles.rowContent}>
+              <View style={styles.rowHeader}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name="school-outline" size={16} color="#666" />
+                  <Text style={styles.rowTitle}>{subject.name}</Text>
                 </View>
+                <Ionicons name="chevron-forward" size={16} color="#666" />
               </View>
-            ))}
-          </View>
-        ) : activeSubjects.length > 0 ? (
-          <View style={styles.subjectsList}>
-            {activeSubjects.map(subject => (
-              <TouchableOpacity
-                key={subject.id}
-                style={styles.subjectCard}
-                onPress={() => router.push(`/subject/${subject.id}`)}
-              >
-                <View style={styles.subjectHeader}>
-                  <Text style={styles.subjectTitle}>{subject.name}</Text>
-                </View>
-                <View style={styles.subjectStats}>
-                  <View style={styles.statItem}>
-                    <Ionicons name="play-circle" size={16} color="#9580FF" />
-                    <Text style={styles.subjectStat}>
-                      {subject.completedVideos} videos watched
-                    </Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Ionicons name="school" size={16} color="#9580FF" />
-                    <Text style={styles.subjectStat}>
-                      {userProgress?.subjects?.[subject.id]?.quizScores ? 
-                        new Set(Object.keys(userProgress.subjects[subject.id].quizScores)
-                          .map(attemptId => attemptId.split('_')[0])).size : 0} quizzes completed
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>
+              <View style={styles.rowMeta}>
+                <Text style={styles.metaText}>
+                  {subject.completedVideos} videos watched • {
+                    userProgress?.subjects?.[subject.id]?.quizScores ? 
+                    new Set(Object.keys(userProgress.subjects[subject.id].quizScores)
+                      .map(attemptId => attemptId.split('_')[0])).size : 0
+                  } quizzes completed
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+        keyExtractor={item => item.id}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
               No active subjects. Start learning!
             </Text>
             <TouchableOpacity 
@@ -425,9 +399,9 @@ export default function LearningScreen() {
               <Text style={styles.browseButtonText}>Browse Subjects</Text>
             </TouchableOpacity>
           </View>
-        )}
-      </View>
-    </ScrollView>
+        }
+      />
+    </View>
   );
 
   const renderContent = () => {
@@ -579,11 +553,14 @@ const styles = StyleSheet.create({
   section: {
     padding: 16,
   },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 12,
   },
   subjectsList: {
     gap: 12,
@@ -699,5 +676,50 @@ const styles = StyleSheet.create({
     height: 16,
     backgroundColor: '#333',
     borderRadius: 4,
+  },
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  rowContent: {
+    gap: 4,
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  rowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  rowTitle: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  rowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 24,
+  },
+  metaText: {
+    color: '#666',
+    fontSize: 12,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#222',
+  },
+  emptyContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 14,
   },
 }); 

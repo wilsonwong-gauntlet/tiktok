@@ -39,7 +39,7 @@ interface SavedInsightsProps {
   loading: boolean;
 }
 
-export default function SavedInsights({ cachedInsights, loading }: SavedInsightsProps) {
+export default function SavedInsights({ cachedInsights = [], loading = false }: SavedInsightsProps) {
   const router = useRouter();
 
   if (loading) {
@@ -87,6 +87,9 @@ export default function SavedInsights({ cachedInsights, loading }: SavedInsights
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Saved Insights ({cachedInsights.length})</Text>
+      </View>
       <FlatList
         data={cachedInsights}
         renderItem={renderInsightRow}
@@ -211,5 +214,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
     borderRadius: 4,
     height: 16,
+  },
+  sectionHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 }); 

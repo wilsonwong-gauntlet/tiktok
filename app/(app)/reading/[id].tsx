@@ -134,7 +134,7 @@ export default function ReadingResourceScreen() {
             <Text style={styles.sectionTitle}>Key Points</Text>
             {resource.keyPoints.map((point, index) => (
               <View key={index} style={styles.point}>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#1a472a" />
+                <Ionicons name="checkmark-circle-outline" size={20} color="#6B21A8" />
                 <Text style={styles.pointText}>{point}</Text>
               </View>
             ))}
@@ -163,7 +163,7 @@ export default function ReadingResourceScreen() {
                 style={styles.link}
                 onPress={() => handleOpenLink(link.url)}
               >
-                <Ionicons name="link-outline" size={20} color="#1a472a" />
+                <Ionicons name="link-outline" size={20} color="#6B21A8" />
                 <Text style={styles.linkText}>{link.title || link.url}</Text>
               </TouchableOpacity>
             ))}
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   conceptTag: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#6B21A8',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     flex: 1,
-    color: '#1a472a',
+    color: '#6B21A8',
     fontSize: 16,
     textDecorationLine: 'underline',
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a472a',
+    backgroundColor: '#6B21A8',
     padding: 16,
     borderRadius: 12,
     gap: 8,

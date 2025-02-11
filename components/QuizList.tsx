@@ -60,7 +60,7 @@ export default function QuizList({ cachedQuizzes = [], loading = false }: QuizLi
             />
             <View style={styles.textContent}>
               <Text style={styles.title} numberOfLines={1}>
-                {quiz.questions?.length || 0} Questions Quiz
+                {quiz.videoTitle}
               </Text>
               {quiz.lastAttempt && (
                 <Text style={[
@@ -85,6 +85,9 @@ export default function QuizList({ cachedQuizzes = [], loading = false }: QuizLi
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Available Quizzes ({cachedQuizzes.length})</Text>
+      </View>
       <FlatList
         data={cachedQuizzes}
         renderItem={renderQuizRow}
@@ -175,5 +178,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
 }); 
