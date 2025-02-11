@@ -141,39 +141,39 @@ export default function SubjectDetailScreen() {
       <View style={styles.titleSection}>
         <Text style={styles.subjectTitle}>{subject?.name}</Text>
         <Text style={styles.videoCount}>{videos.length} videos</Text>
-      </View>
+              </View>
 
       {/* Main Video Section */}
-      <TouchableOpacity 
+              <TouchableOpacity 
         style={styles.mainCard}
-        onPress={() => setSelectedSection('videos')}
-      >
+                  onPress={() => setSelectedSection('videos')}
+                >
         <View style={styles.mainCardContent}>
           <Ionicons name="play-circle" size={32} color="#fff" />
           <Text style={styles.mainCardTitle}>Video Lessons</Text>
           <Text style={styles.mainCardSubtext}>Start learning</Text>
-        </View>
-      </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
 
       {/* Learning Tools Grid */}
       <View style={styles.toolsGrid}>
-        <TouchableOpacity 
+                <TouchableOpacity 
           style={styles.toolCard}
-          onPress={() => setSelectedSection('summaries')}
-        >
-          <Ionicons name="document-text" size={24} color="#fff" />
+                  onPress={() => setSelectedSection('summaries')}
+                >
+                    <Ionicons name="document-text" size={24} color="#fff" />
           <Text style={styles.toolTitle}>Summaries</Text>
-        </TouchableOpacity>
+                </TouchableOpacity>
 
-        <TouchableOpacity 
+                <TouchableOpacity 
           style={styles.toolCard}
-          onPress={() => setSelectedSection('quizzes')}
-        >
-          <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                  onPress={() => setSelectedSection('quizzes')}
+                >
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
           <Text style={styles.toolTitle}>Quizzes</Text>
-        </TouchableOpacity>
+                </TouchableOpacity>
 
-        <TouchableOpacity 
+              <TouchableOpacity 
           style={styles.toolCard}
           onPress={() => setSelectedSection('reading')}
         >
@@ -183,19 +183,19 @@ export default function SubjectDetailScreen() {
 
         <TouchableOpacity 
           style={styles.toolCard}
-          onPress={() => setSelectedSection('reflections')}
-        >
-          <Ionicons name="journal" size={24} color="#fff" />
+                onPress={() => setSelectedSection('reflections')}
+              >
+                  <Ionicons name="journal" size={24} color="#fff" />
           <Text style={styles.toolTitle}>Notes</Text>
-        </TouchableOpacity>
-      </View>
+              </TouchableOpacity>
+            </View>
     </ScrollView>
-  );
+        );
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
+          <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }

@@ -3,15 +3,17 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from '../types/video';
 import { VideoService } from '../services/firebase/video';
+import { useRouter } from 'expo-router';
 
 interface SummaryListProps {
-  videos: Video[];
+  videos?: Video[];
 }
 
-export default function SummaryList({ videos }: SummaryListProps) {
+export default function SummaryList({ videos = [] }: SummaryListProps) {
   const [expandedVideoId, setExpandedVideoId] = useState<string | null>(null);
   const [summaries, setSummaries] = useState<{[key: string]: any}>({});
   const [loading, setLoading] = useState<{[key: string]: boolean}>({});
+  const router = useRouter();
 
   const loadSummary = async (videoId: string) => {
     if (summaries[videoId] || loading[videoId]) return;
@@ -36,7 +38,7 @@ export default function SummaryList({ videos }: SummaryListProps) {
     }
   };
 
-  const videosWithSummaries = videos.filter(video => video.summary);
+  const videosWithSummaries = (videos || []).filter(video => video.summary);
 
   return (
     <ScrollView style={styles.container}>
@@ -48,9 +50,6 @@ export default function SummaryList({ videos }: SummaryListProps) {
           >
             <View>
               <Text style={styles.videoTitle}>{video.title}</Text>
-              <Text style={styles.duration}>
-                {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')} min
-              </Text>
             </View>
             <Ionicons
               name={expandedVideoId === video.id ? 'chevron-up' : 'chevron-down'}
@@ -88,7 +87,7 @@ export default function SummaryList({ videos }: SummaryListProps) {
 
                   <TouchableOpacity 
                     style={styles.watchButton}
-                    onPress={() => {/* Navigate to video */}}
+                    onPress={() => router.push(`/video/${video.id}`)}
                   >
                     <Ionicons name="play-circle-outline" size={20} color="#fff" />
                     <Text style={styles.watchButtonText}>Watch Full Video</Text>
@@ -138,11 +137,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 4,
-  },
-  duration: {
-    fontSize: 14,
-    color: '#666',
   },
   summaryContent: {
     padding: 16,

@@ -512,7 +512,7 @@ export default function LearningPanel({
         
         {Object.entries({
           understanding: {
-            icon: 'brain-outline',
+            icon: 'school-outline',
             title: 'Understanding',
             subtitle: 'What are the main concepts you understand well?'
           },

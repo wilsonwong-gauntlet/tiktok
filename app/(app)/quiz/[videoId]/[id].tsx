@@ -112,9 +112,9 @@ export default function QuizDetailsScreen() {
               <Text style={styles.scoreLabel}>Score</Text>
               <Text style={[
                 styles.scoreValue,
-                { color: quiz.lastAttempt.score >= 0.7 ? '#4CAF50' : '#ff4444' }
+                { color: quiz.lastAttempt.score >= 70 ? '#4CAF50' : '#ff4444' }
               ]}>
-                {Math.round(quiz.lastAttempt.score * 100)}%
+                {Math.round(quiz.lastAttempt.score)}%
               </Text>
               <Text style={styles.attemptDate}>
                 {new Date(quiz.lastAttempt.completedAt).toLocaleDateString()}

@@ -6,15 +6,15 @@ import { router } from 'expo-router';
 import VideoThumbnail from './VideoThumbnail';
 
 interface VideoListProps {
-  videos: Video[];
+  videos?: Video[];
 }
 
-export default function VideoList({ videos }: VideoListProps) {
+export default function VideoList({ videos = [] }: VideoListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'title'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const filteredVideos = videos
+  const filteredVideos = (videos || [])
     .filter(video => 
       video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       video.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -81,14 +81,9 @@ export default function VideoList({ videos }: VideoListProps) {
             <VideoThumbnail video={video} />
             <View style={styles.videoInfo}>
               <Text style={styles.videoTitle}>{video.title}</Text>
-              <Text style={styles.videoMeta}>
-                {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')} min
-                {' • '}
-                {video.viewCount} views
-              </Text>
               {video.completed && (
                 <View style={styles.completedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color="#1a472a" />
+                  <Ionicons name="checkmark-circle" size={16} color="#6B21A8" />
                   <Text style={styles.completedText}>Completed</Text>
                 </View>
               )}
@@ -133,7 +128,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeFilter: {
-    backgroundColor: '#1a472a',
+    backgroundColor: '#6B21A8',
   },
   filterText: {
     color: '#fff',
@@ -157,17 +152,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 4,
   },
-  videoMeta: {
-    fontSize: 14,
-    color: '#666',
-  },
   completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
   },
   completedText: {
-    color: '#1a472a',
+    color: '#6B21A8',
     fontSize: 14,
     marginLeft: 4,
     fontWeight: '500',

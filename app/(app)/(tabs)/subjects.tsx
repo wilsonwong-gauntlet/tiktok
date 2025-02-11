@@ -64,7 +64,7 @@ const getSubjectConfig = (name: string): { icon: string; gradient: [string, stri
       gradient: ['#9580FF', '#80FFB1'] as [string, string],
     },
     psychology: {
-      icon: 'brain-outline',
+      icon: 'school-outline',
       gradient: ['#9580FF', '#FF80B1'] as [string, string],
     },
     economics: {

@@ -1,168 +1,134 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video } from '../types/video';
+import { FurtherReading } from '../types/video';
 import { useRouter } from 'expo-router';
 
-interface ReadingListProps {
-  videos: Video[];
+interface ReadingItem {
+  videoId: string;
+  videoTitle: string;
+  subjectName: string;
+  resource: FurtherReading;
 }
 
-export default function ReadingList({ videos }: ReadingListProps) {
-  const [expandedVideoId, setExpandedVideoId] = useState<string | null>(null);
+interface ReadingListProps {
+  readings: ReadingItem[];
+  loading?: boolean;
+}
+
+export default function ReadingList({ readings = [], loading = false }: ReadingListProps) {
   const router = useRouter();
 
-  const videosWithReading = videos.filter(video => 
-    video.furtherReading && video.furtherReading.length > 0
-  );
-
-  return (
-    <ScrollView style={styles.container}>
-      {videosWithReading.map(video => (
-        <View key={video.id} style={styles.videoSection}>
-          <TouchableOpacity
-            style={styles.videoHeader}
-            onPress={() => setExpandedVideoId(
-              expandedVideoId === video.id ? null : video.id
-            )}
-          >
-            <View>
-              <Text style={styles.videoTitle}>{video.title}</Text>
-              <Text style={styles.resourceCount}>
-                {video.furtherReading?.length} resources
-              </Text>
-            </View>
-            <Ionicons
-              name={expandedVideoId === video.id ? 'chevron-up' : 'chevron-down'}
-              size={24}
-              color="#fff"
-            />
-          </TouchableOpacity>
-
-          {expandedVideoId === video.id && video.furtherReading && (
-            <View style={styles.readingList}>
-              {video.furtherReading.map((reading, index) => (
-                <View key={index} style={styles.readingCard}>
-                  <Text style={styles.readingTitle}>{reading.title}</Text>
-                  <Text style={styles.readingAuthor}>By {reading.author}</Text>
-                  <Text style={styles.readingDescription}>
-                    {reading.description}
-                  </Text>
-                  {reading.url && (
-                    <TouchableOpacity style={styles.readButton}>
-                      <Text style={styles.readButtonText}>Read Now</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#fff" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
+  const renderReadingRow = ({ item: reading }: { item: ReadingItem }) => (
+    <TouchableOpacity
+      style={styles.row}
+      onPress={() => router.push(`/video/${reading.videoId}?highlight=reading`)}
+    >
+      <View style={styles.rowContent}>
+        <View style={styles.rowHeader}>
+          <View style={styles.rowLeft}>
+            <Ionicons name="book-outline" size={16} color="#666" />
+            <Text style={styles.readingText}>
+              {reading.resource.title}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#666" />
         </View>
-      ))}
-
-      {videosWithReading.length === 0 && (
-        <View style={styles.emptyState}>
-          <Ionicons name="book-outline" size={48} color="#666" />
-          <Text style={styles.emptyTitle}>No Reading Materials Yet</Text>
-          <Text style={styles.emptyText}>
-            Start watching videos to discover recommended reading materials and resources
+        <View style={styles.rowMeta}>
+          <Text style={styles.metaText}>
+            {reading.subjectName} • From {reading.videoTitle} • By {reading.resource.author}
           </Text>
         </View>
-      )}
-    </ScrollView>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Loading reading materials...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={readings}
+        renderItem={renderReadingRow}
+        keyExtractor={(item, index) => `${item.videoId}-${index}`}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No reading materials yet</Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#111',
   },
-  videoSection: {
-    backgroundColor: '#222',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  videoHeader: {
+  rowContent: {
+    gap: 4,
+  },
+  rowHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  videoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  rowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  readingText: {
+    flex: 1,
     color: '#fff',
-    marginBottom: 4,
-  },
-  resourceCount: {
     fontSize: 14,
-    color: '#666',
-  },
-  readingList: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-  },
-  readingCard: {
-    backgroundColor: '#1a1a1a',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  readingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  readingAuthor: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  readingDescription: {
-    fontSize: 14,
-    color: '#999',
     lineHeight: 20,
-    marginBottom: 12,
   },
-  readButton: {
+  rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#6B21A8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingLeft: 24,
   },
-  readButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    marginRight: 4,
+  metaText: {
+    color: '#666',
+    fontSize: 12,
   },
-  emptyState: {
-    padding: 32,
+  separator: {
+    height: 1,
+    backgroundColor: '#222',
+  },
+  emptyContainer: {
+    padding: 16,
     alignItems: 'center',
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 16,
-    marginBottom: 8,
   },
   emptyText: {
     color: '#666',
     fontSize: 14,
+  },
+  loadingText: {
+    color: '#666',
+    fontSize: 14,
     textAlign: 'center',
+    padding: 16,
   },
 }); 

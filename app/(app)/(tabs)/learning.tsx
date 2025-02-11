@@ -15,17 +15,15 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 
 type Tab = 'overview' | 'reading' | 'quizzes' | 'notes' | 'insights';
 
+interface ReadingItem {
+  videoId: string;
+  videoTitle: string;
+  subjectName: string;
+  resource: FurtherReading;
+}
+
 interface CachedData {
-  readings: {
-    [subjectId: string]: {
-      subjectName: string;
-      resources: {
-        videoId: string;
-        videoTitle: string;
-        resource: FurtherReading;
-      }[];
-    };
-  };
+  readings: ReadingItem[];
   quizzes: {
     id: string;
     videoId: string;
@@ -70,7 +68,7 @@ export default function LearningScreen() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [cachedData, setCachedData] = useState<CachedData>({
-    readings: {},
+    readings: [],
     quizzes: [],
     notes: [],
     insights: [],
@@ -150,7 +148,7 @@ export default function LearningScreen() {
 
     // Check for existing data to avoid loading state
     const hasExistingData = activeTab === 'reading' 
-      ? Object.keys(cachedData.readings).length > 0
+      ? cachedData.readings.length > 0
       : cachedData[activeTab].length > 0;
 
     if (!hasExistingData) {
@@ -192,34 +190,52 @@ export default function LearningScreen() {
   };
 
   const loadQuizzes = async () => {
-    const videosRef = collection(db, 'videos');
-    const videosSnapshot = await getDocs(query(videosRef, where('quiz', '!=', null)));
-    
-    const attemptsRef = collection(db, 'quizAttempts');
-    const attemptsSnapshot = await getDocs(
-      query(attemptsRef, where('userId', '==', auth.currentUser!.uid))
-    );
+    if (!auth.currentUser) return [];
 
-    const attempts = new Map(
-      attemptsSnapshot.docs.map(doc => [doc.data().quizId, doc.data() as QuizAttempt])
-    );
+    try {
+      // Get all videos that have quizzes
+      const videosRef = collection(db, 'videos');
+      const videosSnapshot = await getDocs(query(videosRef, where('quiz', '!=', null)));
+      
+      // Get all quiz attempts for the current user
+      const attemptsRef = collection(db, 'quizAttempts');
+      const attemptsSnapshot = await getDocs(
+        query(attemptsRef, where('userId', '==', auth.currentUser.uid))
+      );
 
-    const subjectsRef = collection(db, 'subjects');
-    const subjectsSnapshot = await getDocs(subjectsRef);
-    const subjects = new Map(
-      subjectsSnapshot.docs.map(doc => [doc.id, doc.data().name])
-    );
+      // Create a map of quiz attempts
+      const attempts = new Map(
+        attemptsSnapshot.docs.map(doc => {
+          const data = doc.data() as QuizAttempt;
+          return [data.quizId, data];
+        })
+      );
 
-    return videosSnapshot.docs.map(doc => {
-      const video = doc.data();
-      return {
-        ...video.quiz,
-        videoId: doc.id,
-        videoTitle: video.title,
-        subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
-        lastAttempt: attempts.get(video.quiz.id),
-      };
-    });
+      // Get all subject names
+      const subjectIds = new Set(videosSnapshot.docs.map(doc => doc.data().subjectId));
+      const subjectsRef = collection(db, 'subjects');
+      const subjectsSnapshot = await getDocs(subjectsRef);
+      const subjects = new Map(
+        subjectsSnapshot.docs
+          .filter(doc => subjectIds.has(doc.id))
+          .map(doc => [doc.id, doc.data().name])
+      );
+
+      // Map the videos to quiz data
+      return videosSnapshot.docs.map(doc => {
+        const video = doc.data() as Video;
+        return {
+          ...video.quiz,
+          videoId: doc.id,
+          videoTitle: video.title,
+          subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
+          lastAttempt: attempts.get(video.quiz!.id),
+        };
+      });
+    } catch (error) {
+      console.error('Error loading quizzes:', error);
+      return [];
+    }
   };
 
   const loadNotes = async () => {
@@ -279,44 +295,48 @@ export default function LearningScreen() {
   };
 
   const loadReadingResources = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) return [];
 
     try {
-      const allSubjects = await SubjectService.getAllSubjects();
-      const readingsBySubject: CachedData['readings'] = {};
-
-      // Load all videos in parallel
-      const subjectsWithVideos = await Promise.all(
-        allSubjects.map(async subject => ({
-          subject,
-          videos: await VideoService.getVideosBySubject(subject.id)
-        }))
+      // Get all videos that have further reading
+      const videosRef = collection(db, 'videos');
+      const videosSnapshot = await getDocs(
+        query(videosRef, where('furtherReading', '!=', null))
       );
 
-      // Process the results
-      for (const { subject, videos } of subjectsWithVideos) {
-        const subjectResources = videos
-          .filter(video => video.furtherReading && video.furtherReading.length > 0)
-          .flatMap(video => 
-            video.furtherReading!.map(resource => ({
-              videoId: video.id,
+      // Get all subject names
+      const subjectIds = new Set(videosSnapshot.docs.map(doc => doc.data().subjectId));
+      const subjectsRef = collection(db, 'subjects');
+      const subjectsSnapshot = await getDocs(subjectsRef);
+      const subjects = new Map(
+        subjectsSnapshot.docs
+          .filter(doc => subjectIds.has(doc.id))
+          .map(doc => [doc.id, doc.data().name])
+      );
+
+      // Process videos into reading resources
+      const readings: ReadingItem[] = [];
+
+      videosSnapshot.docs.forEach(doc => {
+        const video = doc.data() as Video;
+        
+        if (video.furtherReading && video.furtherReading.length > 0) {
+          // Add each reading resource
+          video.furtherReading.forEach(resource => {
+            readings.push({
+              videoId: doc.id,
               videoTitle: video.title,
+              subjectName: subjects.get(video.subjectId) || 'Unknown Subject',
               resource,
-            }))
-          );
-
-        if (subjectResources.length > 0) {
-          readingsBySubject[subject.id] = {
-            subjectName: subject.name,
-            resources: subjectResources,
-          };
+            });
+          });
         }
-      }
+      });
 
-      return readingsBySubject;
+      return readings;
     } catch (error) {
       console.error('Error loading reading resources:', error);
-      return {};
+      return [];
     }
   };
 
@@ -426,9 +446,6 @@ export default function LearningScreen() {
         return (
           <ReadingList 
             readings={cachedData.readings} 
-            onResourcePress={(videoId, resource) => {
-              router.push(`/video/${videoId}?highlight=reading`);
-            }}
             loading={isLoading}
           />
         );
