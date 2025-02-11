@@ -270,36 +270,13 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const shouldPlay = (isModal || (isActive && isInHomeTab)) && !manuallyPaused;
   
   const player = useVideoPlayer(video.url, player => {
-    console.log('Video player initialized:', {
-      videoId: video.id,
-      url: video.url,
-      shouldLoop: true
-    });
     player.loop = true;
   });
 
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
   const { status } = useEvent(player, 'statusChange', { status: player.status });
 
-  // Debug logging for player state changes
   useEffect(() => {
-    console.log('Player State Change:', {
-      videoId: video.id,
-      status,
-      isPlaying,
-      shouldPlay
-    });
-  }, [status, isPlaying, shouldPlay]);
-
-  useEffect(() => {
-    console.log('Playback state update:', {
-      videoId: video.id,
-      shouldPlay,
-      manuallyPaused,
-      isActive,
-      isInHomeTab
-    });
-
     if (shouldPlay && status === 'readyToPlay' && !isPlaying) {
       player.play();
     } else if (!shouldPlay && isPlaying) {
@@ -354,25 +331,16 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
     const interval = setInterval(() => {
       if (status === 'readyToPlay' && isPlaying) {
         const progress = player.currentTime / player.duration;
-        console.log('Video progress:', {
-          currentTime: player.currentTime,
-          duration: player.duration,
-          progress: progress,
-          threshold: COMPLETION_THRESHOLD
-        });
         
         // Mark video as completed when user watches 90% or reaches the end
         if (progress >= COMPLETION_THRESHOLD) {
-          console.log('Video reached completion threshold');
           const currentUser = auth.currentUser;
           if (!currentUser) {
-            console.error('User not authenticated');
             return;
           }
           
           VideoService.markVideoCompleted(currentUser.uid, video.id, video.subjectId)
             .then(() => {
-              console.log('Successfully marked video as completed');
               // Call the onVideoComplete callback if provided
               onVideoComplete?.();
               // Also refresh the learning data if the function exists
@@ -478,92 +446,31 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const handleSmartSeek = useCallback(async (query: string) => {
     if (!query.trim()) return;
     
-    // Add detailed transcription logging
-    console.log('🔍 Video Transcription Debug:', {
-      videoId: video.id,
-      transcriptionStatus: video.transcriptionStatus,
-      hasTranscription: !!video.transcription,
-      transcriptionLength: video.transcription?.length || 0,
-      hasSegments: !!video.transcriptionSegments,
-      segmentsCount: video.transcriptionSegments?.length || 0,
-      firstSegment: video.transcriptionSegments?.[0],
-      lastSegment: video.transcriptionSegments?.[video.transcriptionSegments?.length - 1],
-    });
-
-    console.log('🔍 SmartSeek Debug:', {
-      action: 'starting_search',
-      query,
-      videoId: video.id,
-      hasTranscription: !!video.transcription,
-      hasSegments: !!video.transcriptionSegments,
-      transcriptionStatus: video.transcriptionStatus
-    });
-
     setIsSearching(true);
     try {
-      console.log('🔍 Calling VideoService.smartSeek...');
       const results = await VideoService.smartSeek(video.id, query);
-      console.log('🔍 SmartSeek results:', {
-        success: true,
-        resultsCount: results.length,
-        results: results.map(r => ({
-          timestamp: r.timestamp,
-          confidence: r.confidence,
-          context: r.context.substring(0, 50) + '...' // First 50 chars for readability
-        }))
-      });
-      
-      if (results.length === 0) {
-        console.log('⚠️ No results found for query:', query);
-      }
       
       setSearchResults(results);
     } catch (error) {
-      console.error('🔴 Smart seek error:', {
-        error,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        videoId: video.id,
-        query
-      });
+      console.error('Error in smart seek:', error);
     } finally {
       setIsSearching(false);
     }
-  }, [video.id, video.transcription, video.transcriptionSegments, video.transcriptionStatus]);
+  }, [video.id]);
 
   const handleSeekToResult = useCallback((timestamp: number) => {
-    console.log('🎯 Seeking to result:', {
-      timestamp,
-      formattedTime: formatTime(timestamp),
-      currentTime: player?.currentTime
-    });
-
     if (player && status === 'readyToPlay') {
       const boundedTime = Math.max(0, Math.min(timestamp, player.duration));
       const seekAmount = boundedTime - player.currentTime;
       
-      console.log('🎯 Seek details:', {
-        boundedTime,
-        seekAmount,
-        duration: player.duration
-      });
-
       if (Math.abs(seekAmount) > 0.5) {
         player.seekBy(seekAmount);
         setCurrentTime(boundedTime);
-        console.log('✅ Performed seek');
-      } else {
-        console.log('ℹ️ Seek skipped - too small change');
       }
       
       // Clear search results after seeking
       setSearchResults([]);
       setSearchQuery('');
-    } else {
-      console.log('⚠️ Cannot seek:', {
-        hasPlayer: !!player,
-        status,
-        isReady: status === 'readyToPlay'
-      });
     }
   }, [player, status]);
 
@@ -650,8 +557,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
             </ScrollView>
           )}
 
-          {/* Temporarily disabled chapter markers and coaching prompts */}
-          {/* <TouchableOpacity
+          <TouchableOpacity
             style={styles.chaptersButton}
             onPress={() => setShowChapters(!showChapters)}
           >
@@ -682,7 +588,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          )} */}
+          )}
 
           <View style={styles.rightActions}>
             <ActionButton
@@ -764,13 +670,12 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         videoId={video.id}
       />
 
-      {/* Temporarily disabled coaching prompts */}
-      {/* <MemoizedCoachingPrompts
+      <MemoizedCoachingPrompts
         prompts={video.coachingPrompts || []}
         currentTime={timeRef.current}
         onGeneratePrompts={handleGeneratePrompts}
         isGenerating={isGeneratingPrompts}
-      /> */}
+      />
 
       <VideoProgressBar
         ref={videoProgressBarRef}
