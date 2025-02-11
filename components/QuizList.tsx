@@ -14,6 +14,9 @@ import { auth, db } from '../services/firebase/index';
 import { collection, query, getDocs, where } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Quiz, QuizAttempt, QuizQuestion } from '../types/video';
+import { Video, Subject } from '../types/video';
+import { getLastQuizAttempt } from '../services/firebase/learning';
+import QuizPanel from './QuizPanel';
 
 interface QuizWithMeta extends Quiz {
   subjectName: string;
@@ -22,166 +25,181 @@ interface QuizWithMeta extends Quiz {
 }
 
 interface QuizListProps {
-  cachedQuizzes: {
-    id: string;
-    videoId: string;
-    videoTitle: string;
-    subjectName: string;
-    questions: QuizQuestion[];
-    lastAttempt?: QuizAttempt;
-  }[];
-  loading: boolean;
+  videos: Video[];
+  subject: Subject;
 }
 
-export default function QuizList({ cachedQuizzes, loading }: QuizListProps) {
+export default function QuizList({ videos, subject }: QuizListProps) {
   const router = useRouter();
+  const [expandedVideoId, setExpandedVideoId] = useState<string | null>(null);
+  const [quizAttempts, setQuizAttempts] = useState<{[key: string]: QuizAttempt | null}>({});
 
-  if (loading) {
-    return (
-      <ScrollView style={styles.container}>
-        {[1, 2, 3].map((_, index) => (
-          <View key={index} style={[styles.quizCard, styles.skeletonCard]}>
-            <View style={[styles.skeletonText, { width: '70%', marginBottom: 12 }]} />
-            <View style={[styles.skeletonText, { width: '40%', marginBottom: 16 }]} />
-            <View style={styles.quizMeta}>
-              <View style={[styles.skeletonText, { width: 80 }]} />
-              <View style={[styles.skeletonText, { width: 60 }]} />
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    );
-  }
+  useEffect(() => {
+    if (auth.currentUser) {
+      loadQuizAttempts();
+    }
+  }, []);
 
-  const renderQuizRow = ({ item: quiz }: { item: QuizListProps['cachedQuizzes'][0] }) => (
-    <TouchableOpacity
-      style={styles.row}
-      onPress={() => router.push(`/quiz/${quiz.videoId}/${quiz.id}`)}
-    >
-      <View style={styles.rowContent}>
-        <View style={styles.rowHeader}>
-          <View style={styles.rowLeft}>
-            <Ionicons 
-              name={quiz.lastAttempt ? "checkmark-circle" : "school-outline"} 
-              size={16} 
-              color={quiz.lastAttempt ? "#4CAF50" : "#666"} 
-            />
-            <View style={styles.textContent}>
-              <Text style={styles.title} numberOfLines={1}>
-                {quiz.questions.length} Questions Quiz
-              </Text>
-              {quiz.lastAttempt && (
-                <Text style={[
-                  styles.score,
-                  { color: quiz.lastAttempt.score >= 0.7 ? '#4CAF50' : '#ff4444' }
-                ]}>
-                  Score: {Math.round(quiz.lastAttempt.score * 100)}%
-                </Text>
-              )}
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#666" />
-        </View>
-        <View style={styles.rowMeta}>
-          <Text style={styles.metaText}>
-            {quiz.subjectName} • From {quiz.videoTitle}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  const loadQuizAttempts = async () => {
+    const attempts: {[key: string]: QuizAttempt | null} = {};
+    
+    for (const video of videos) {
+      if (video.quiz) {
+        const attempt = await getLastQuizAttempt(auth.currentUser!.uid, video.quiz.id);
+        attempts[video.id] = attempt || null;
+      }
+    }
+    
+    setQuizAttempts(attempts);
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return '#4CAF50';
+    if (score >= 60) return '#FFC107';
+    return '#f44336';
+  };
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date);
+  };
+
+  const videosWithQuizzes = videos.filter(video => video.quiz);
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={cachedQuizzes}
-        renderItem={renderQuizRow}
-        keyExtractor={item => item.id}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No quizzes available</Text>
-          </View>
-        }
-      />
-    </View>
+    <ScrollView style={styles.container}>
+      {videosWithQuizzes.map(video => (
+        <View key={video.id} style={styles.quizCard}>
+          <TouchableOpacity
+            style={styles.quizHeader}
+            onPress={() => setExpandedVideoId(
+              expandedVideoId === video.id ? null : video.id
+            )}
+          >
+            <View style={styles.headerContent}>
+              <Text style={styles.videoTitle}>{video.title}</Text>
+              <View style={styles.quizMeta}>
+                <Text style={styles.questionCount}>
+                  {video.quiz?.questions.length} questions
+                </Text>
+                {quizAttempts[video.id] && (
+                  <Text style={[
+                    styles.score,
+                    { color: getScoreColor(quizAttempts[video.id]!.score) }
+                  ]}>
+                    • Last attempt: {formatDate(quizAttempts[video.id]!.completedAt)} 
+                    ({Math.round(quizAttempts[video.id]!.score)}%)
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Ionicons
+              name={expandedVideoId === video.id ? 'chevron-up' : 'chevron-down'}
+              size={24}
+              color="#fff"
+            />
+          </TouchableOpacity>
+
+          {expandedVideoId === video.id && video.quiz && (
+            <View style={styles.quizContent}>
+              <QuizPanel
+                quiz={video.quiz}
+                videoId={video.id}
+                subjectId={subject.id}
+                onComplete={async (score) => {
+                  if (auth.currentUser) {
+                    setQuizAttempts(prev => ({
+                      ...prev,
+                      [video.id]: {
+                        id: `${video.quiz!.id}_${Date.now()}`,
+                        userId: auth.currentUser!.uid,
+                        quizId: video.quiz!.id,
+                        score,
+                        completedAt: new Date(),
+                        answers: []
+                      }
+                    }));
+                  }
+                }}
+              />
+            </View>
+          )}
+        </View>
+      ))}
+
+      {videosWithQuizzes.length === 0 && (
+        <View style={styles.emptyState}>
+          <Ionicons name="checkmark-circle-outline" size={48} color="#666" />
+          <Text style={styles.emptyTitle}>No Quizzes Yet</Text>
+          <Text style={styles.emptyText}>
+            Start watching videos to unlock quizzes and test your knowledge
+          </Text>
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111',
+    padding: 16,
   },
-  row: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  quizCard: {
+    backgroundColor: '#222',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
-  rowContent: {
-    gap: 4,
-  },
-  rowHeader: {
+  quizHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    padding: 16,
   },
-  rowLeft: {
+  headerContent: {
     flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
+    marginRight: 16,
   },
-  textContent: {
-    flex: 1,
-  },
-  title: {
+  videoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#fff',
+    marginBottom: 4,
+  },
+  quizMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  questionCount: {
     fontSize: 14,
-    lineHeight: 20,
+    color: '#666',
   },
   score: {
-    fontSize: 12,
+    fontSize: 14,
+    marginLeft: 4,
   },
-  rowMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 24,
-  },
-  metaText: {
-    color: '#666',
-    fontSize: 12,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#222',
-  },
-  emptyContainer: {
+  quizContent: {
     padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  emptyState: {
+    padding: 32,
     alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 16,
+    marginBottom: 8,
   },
   emptyText: {
     color: '#666',
     fontSize: 14,
-  },
-  quizCard: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#222',
-    borderRadius: 4,
-    marginBottom: 16,
-  },
-  skeletonCard: {
-    opacity: 0.7,
-  },
-  skeletonText: {
-    backgroundColor: '#333',
-    borderRadius: 4,
-    height: 16,
-  },
-  quizMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    textAlign: 'center',
   },
 }); 

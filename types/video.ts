@@ -28,6 +28,7 @@ export interface Quiz {
   id: string;
   videoId: string;
   questions: QuizQuestion[];
+  completed?: boolean;
 }
 
 export interface QuizAttempt {
@@ -105,12 +106,14 @@ export interface Video {
   coachingPrompts?: CoachingPrompt[];
   promptsGeneratedAt?: Date;
   chapterMarkers?: ChapterMarker[];
+  completed: boolean;
 }
 
 export interface FurtherReading {
   title: string;
   author: string;
   description: string;
+  url?: string;
 }
 
 export interface VideoFeed {
