@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FurtherReading, VideoSummary, Video, TranscriptionSegment } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
 import { VideoService } from '../services/firebase/video';
@@ -98,6 +99,21 @@ export default function LearningPanel({
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [summary, setSummary] = useState<VideoSummary | undefined>(initialSummary);
   const [note, setNote] = useState<Note | null>(null);
+  const insets = useSafeAreaInsets();
+
+  // Calculate learning progress based on completed sections
+  const getProgressPercentage = () => {
+    let completedSections = 0;
+    let totalSections = 5; // Total number of sections: summary, transcription, notes, quiz, reading
+
+    if (summary) completedSections++;
+    if (transcriptionStatus === 'completed') completedSections++;
+    if (notes.content.length > 0) completedSections++;
+    if (quiz) completedSections++;
+    if (furtherReading && furtherReading.length > 0) completedSections++;
+
+    return Math.round((completedSections / totalSections) * 100);
+  };
 
   useEffect(() => {
     if (visible && auth.currentUser) {
@@ -272,21 +288,34 @@ export default function LearningPanel({
     }
   };
 
-  const renderTab = (tab: Tab, label: string, icon: string) => (
-    <TouchableOpacity
-      style={[styles.tab, activeTab === tab && styles.activeTab]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <Ionicons 
-        name={icon as any} 
-        size={24} 
-        color={activeTab === tab ? '#fff' : '#666'} 
-      />
-      <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+  const renderTab = (tab: Tab, label: string, icon: string) => {
+    // Use shorter labels
+    const shortLabel = {
+      'transcription': 'Script',
+      'summary': 'Summary',
+      'notes': 'Notes',
+      'quiz': 'Quiz',
+      'reading': 'Reading'
+    }[tab];
+
+    return (
+      <TouchableOpacity
+        style={[styles.tab, activeTab === tab && styles.activeTab]}
+        onPress={() => setActiveTab(tab)}
+        activeOpacity={0.7}
+      >
+        <Ionicons 
+          name={icon as any} 
+          size={22} // Reduced from 24
+          color="#fff"
+          style={[styles.tabIcon, activeTab === tab && styles.activeTabIcon]}
+        />
+        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]} numberOfLines={1}>
+          {shortLabel}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderTranscriptionContent = () => {
     switch (transcriptionStatus) {
@@ -674,28 +703,65 @@ export default function LearningPanel({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        <View style={styles.panel}>
+        <View style={[styles.panel, { paddingTop: insets.top }]}>
           <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#fff" />
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={styles.closeButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="chevron-down" size={24} color="#fff" />
             </TouchableOpacity>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
           </View>
 
-          <View style={styles.tabs}>
-            {renderTab('summary', 'Summary', 'document-text-outline')}
-            {renderTab('transcription', 'Transcript', 'text-outline')}
-            {renderTab('notes', 'Notes', 'pencil-outline')}
-            {renderTab('quiz', 'Quiz', 'school-outline')}
-            {renderTab('reading', 'Reading', 'book-outline')}
+          <View style={styles.progressSection}>
+            <View style={styles.progressInfo}>
+              <Text style={styles.progressTitle}>Learning Progress</Text>
+              <Text style={styles.progressPercentage}>{getProgressPercentage()}%</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressBar, { width: `${getProgressPercentage()}%` }]} />
+            </View>
           </View>
 
-          {renderContent()}
+          <View style={styles.navigation}>
+            {[
+              { id: 'summary', icon: 'document-text-outline', label: 'Summary', subtitle: 'Quick Overview', complete: !!summary },
+              { id: 'transcription', icon: 'text-outline', label: 'Transcript', subtitle: 'Full Content', complete: transcriptionStatus === 'completed' },
+              { id: 'notes', icon: 'pencil-outline', label: 'Notes', subtitle: 'Your Thoughts', complete: notes.content.length > 0 },
+              { id: 'quiz', icon: 'school-outline', label: 'Quiz', subtitle: 'Test Knowledge', complete: !!quiz },
+              { id: 'reading', icon: 'book-outline', label: 'Reading', subtitle: 'Learn More', complete: furtherReading && furtherReading.length > 0 }
+            ].map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.navItem, activeTab === item.id && styles.activeNavItem]}
+                onPress={() => setActiveTab(item.id as Tab)}
+              >
+                <View style={styles.navIcon}>
+                  <Ionicons name={item.icon as any} size={22} color={activeTab === item.id ? '#1a472a' : '#fff'} />
+                  {item.complete && (
+                    <View style={styles.completeBadge}>
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.navContent}>
+                  <Text style={[styles.navTitle, activeTab === item.id && styles.activeNavTitle]}>{item.label}</Text>
+                  <Text style={styles.navSubtitle}>{item.subtitle}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.content}>
+            {renderContent()}
+          </View>
         </View>
       </View>
     </Modal>
@@ -705,58 +771,153 @@ export default function LearningPanel({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
   },
   panel: {
+    flex: 1,
     backgroundColor: '#111',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    minHeight: '70%',
-    maxHeight: '90%',
-    padding: 20,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#111',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   title: {
     color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  tabs: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  tab: {
+    fontSize: 18,
+    fontWeight: '600',
     flex: 1,
+  },
+  progressSection: {
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 10,
-    opacity: 0.7,
+    marginBottom: 8,
   },
-  activeTab: {
-    opacity: 1,
-    borderBottomWidth: 2,
-    borderBottomColor: '#fff',
-  },
-  tabText: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  activeTabText: {
+  progressTitle: {
     color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  progressPercentage: {
+    color: '#1a472a',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#1a472a',
+    borderRadius: 2,
+  },
+  navigation: {
+    backgroundColor: '#1a1a1a',
+    paddingBottom: 8,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  activeNavItem: {
+    backgroundColor: 'rgba(26, 71, 42, 0.15)',
+  },
+  navIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  completeBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1a1a1a',
+  },
+  navContent: {
+    flex: 1,
+  },
+  navTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  activeNavTitle: {
+    color: '#1a472a',
+  },
+  navSubtitle: {
+    color: '#999',
+    fontSize: 13,
   },
   content: {
     flex: 1,
+    backgroundColor: '#111',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingVertical: 8, // Reduced from 12
+    paddingHorizontal: 4, // Reduced from 8
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    minWidth: 60,
+  },
+  activeTab: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  tabIcon: {
+    marginBottom: 4, // Reduced from 6
+    opacity: 0.6,
+  },
+  activeTabIcon: {
+    opacity: 1,
+  },
+  tabText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12, // Reduced from 13
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  activeTabText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   contentText: {
     color: '#fff',
@@ -994,6 +1155,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   resourceCard: {
     backgroundColor: '#222',
