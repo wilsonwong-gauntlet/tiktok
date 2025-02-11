@@ -986,6 +986,7 @@ const styles = StyleSheet.create({
   },
   chaptersSection: {
     marginTop: 24,
+    flex: 1
   },
   sectionTitle: {
     color: '#fff',
@@ -994,7 +995,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chaptersContainer: {
-    maxHeight: 300,
+    flex: 1,
   },
   chapterItem: {
     flexDirection: 'row',
