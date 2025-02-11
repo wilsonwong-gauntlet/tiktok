@@ -1304,32 +1304,31 @@ export const smartSeek = onCall(
       }
 
       const videoData = videoDoc.data();
-      logger.info("Video data:", {
-        hasTranscriptionSegments: !!videoData?.transcriptionSegments,
-        transcriptionStatus: videoData?.transcriptionStatus,
-        segmentsCount: videoData?.transcriptionSegments?.length || 0,
-      });
-
       if (!videoData?.transcriptionSegments || videoData.transcriptionStatus !== "completed") {
         throw new Error("Video transcription is not available");
       }
 
-      // Lower the confidence threshold for testing
-      const CONFIDENCE_THRESHOLD = 0.5; // Changed from 0.7 to 0.5
+      // Lower the confidence threshold for better recall
+      const CONFIDENCE_THRESHOLD = 0.3; // Lowered from 0.5 to 0.3
 
       // Process segments to find matches
       const segments = videoData.transcriptionSegments as TranscriptionSegment[];
-      logger.info("Processing segments:", {
-        totalSegments: segments.length,
-        query,
-        firstSegment: segments[0],
-      });
 
-      // Get embeddings for the query
+      // Get embeddings for multiple variations of the query
       const openai = new OpenAI({apiKey: openaiApiKey.value()});
+
+      // Create query variations for better matching
+      const queryVariations = [
+        query, // Original query
+        `concept of ${query}`, // Conceptual variation
+        `meaning of ${query}`, // Meaning variation
+        `${query} explanation`, // Explanation variation
+        `example of ${query}`, // Example variation
+      ];
+
       const queryEmbedding = await openai.embeddings.create({
         model: "text-embedding-3-small",
-        input: query,
+        input: queryVariations,
       });
 
       // Get embeddings for each segment in batches
@@ -1344,28 +1343,36 @@ export const smartSeek = onCall(
           input: segmentTexts,
         });
 
-        // Calculate similarity scores
+        // Calculate similarity scores using best matching query variation
         batch.forEach((segment, index) => {
-          const similarity = calculateCosineSimilarity(
-            queryEmbedding.data[0].embedding,
-            segmentEmbeddings.data[index].embedding,
+          // Find best matching query variation
+          const similarities = queryEmbedding.data.map((qEmbed) =>
+            calculateCosineSimilarity(qEmbed.embedding, segmentEmbeddings.data[index].embedding)
           );
+          const bestSimilarity = Math.max(...similarities);
 
-          if (similarity > CONFIDENCE_THRESHOLD) {
+          // Also check for substring matches
+          const hasSubstringMatch = segment.text.toLowerCase().includes(query.toLowerCase());
+
+          // Boost confidence if there's a direct substring match
+          const finalConfidence = hasSubstringMatch ?
+            Math.max(bestSimilarity, 0.7) : // Boost exact matches
+            bestSimilarity;
+
+          if (finalConfidence > CONFIDENCE_THRESHOLD) {
             results.push({
               timestamp: segment.start,
-              confidence: similarity,
+              confidence: finalConfidence,
               context: segment.text,
-              // Could generate thumbnails here if needed
             });
           }
         });
       }
 
-      // Sort by confidence and take top 5
+      // Sort by confidence and take top 8 (increased from 5)
       const topResults = results
         .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 5);
+        .slice(0, 8);
 
       logger.info("=== Successfully completed smartSeek function ===");
       return {results: topResults};
