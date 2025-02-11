@@ -12,9 +12,60 @@ import * as logger from "firebase-functions/logger";
 import OpenAI from "openai";
 import {defineSecret} from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import {
+  getFirestore,
+  DocumentData,
+  QueryDocumentSnapshot,
+  CollectionReference,
+  DocumentReference,
+  Query,
+  WhereFilterOp,
+} from "firebase-admin/firestore";
+import {UserProgress} from "../../types/video";
 
 // Initialize Firebase Admin
 admin.initializeApp();
+
+// Initialize Firestore
+const db = getFirestore();
+
+// Define allowed types for Firestore query values
+type WhereValue = string | number | boolean | null | Date | DocumentReference | Array<string | number | boolean | null | Date | DocumentReference>;
+
+// Helper functions for Firestore operations
+const createRef = {
+  collection: (path: string): CollectionReference => db.collection(path),
+  doc: (collectionPath: string, ...pathSegments: string[]): DocumentReference =>
+    db.collection(collectionPath).doc(pathSegments.join("/")),
+};
+
+const createQuery = {
+  where: (
+    collection: CollectionReference,
+    field: string,
+    op: WhereFilterOp,
+    value: WhereValue
+  ): Query => collection.where(field, op, value),
+};
+
+const dbOperations = {
+  getDoc: async (ref: DocumentReference) => {
+    const snapshot = await ref.get();
+    return {
+      data: () => snapshot.data(),
+      exists: snapshot.exists,
+    };
+  },
+  getDocs: async (ref: Query | CollectionReference) => {
+    const snapshot = await ref.get();
+    return {
+      docs: snapshot.docs,
+      empty: snapshot.empty,
+      size: snapshot.size,
+    };
+  },
+  update: async (ref: DocumentReference, data: Partial<DocumentData>) => ref.update(data),
+};
 
 // Define secrets
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
@@ -1645,4 +1696,334 @@ function calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
   const norm1 = Math.sqrt(vec1.reduce((acc, val) => acc + val * val, 0));
   const norm2 = Math.sqrt(vec2.reduce((acc, val) => acc + val * val, 0));
   return dotProduct / (norm1 * norm2);
+}
+
+export interface LearningStyleAnalysis {
+  preferredContentTypes: string[];
+  optimalDuration: number;
+  challengeLevel: number;
+  conceptConnections: string[];
+  learningPace: "fast" | "medium" | "slow";
+}
+
+export interface KnowledgeGapAnalysis {
+  weakConcepts: string[];
+  misunderstoodRelationships: string[];
+  recommendedPractice: string[];
+  confidenceScores: { [conceptId: string]: number };
+}
+
+export const analyzeLearningStyle = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+  },
+  async (request: CallableRequest<{ userId: string }>) => {
+    try {
+      logger.info("Starting learning style analysis for user:", request.data.userId);
+      const {userId} = request.data;
+
+      // Get user's learning history
+      const userProgressRef = createRef.doc("users", userId, "progress", "learning");
+      const progressDoc = await dbOperations.getDoc(userProgressRef);
+      const userProgress = progressDoc.data() as UserProgress;
+
+      // Get quiz attempts for pattern analysis
+      const quizAttemptsRef = createRef.collection(`users/${userId}/quizAttempts`);
+      const quizSnapshot = await dbOperations.getDocs(quizAttemptsRef);
+      const quizAttempts = quizSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        score: doc.data().score || 0,
+        completedAt: doc.data().completedAt?.toDate() || new Date(),
+        wrongAnswers: doc.data().wrongAnswers || [],
+      })) as QuizAttempt[];
+
+      // Analyze video viewing patterns
+      const videoInteractionsRef = createRef.collection(`users/${userId}/videoInteractions`);
+      const videoSnapshot = await dbOperations.getDocs(videoInteractionsRef);
+      const videoPatterns = videoSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        videoId: doc.data().videoId || "",
+        timestamp: doc.data().timestamp?.toDate() || new Date(),
+        duration: doc.data().duration || 0,
+        replaySegments: doc.data().replaySegments || [],
+      })) as VideoPlaybackPattern[];
+
+      // Prepare comprehensive learning data
+      const learningData = {
+        quizPerformance: {
+          attempts: quizAttempts,
+          averageScore: calculateAverageScore(quizAttempts),
+          timeDistribution: analyzeTimeDistribution(quizAttempts),
+          errorPatterns: findErrorPatterns(quizAttempts),
+        },
+        videoEngagement: {
+          patterns: videoPatterns,
+          averageWatchTime: calculateAverageWatchTime(videoPatterns),
+          preferredTimes: findPreferredStudyTimes(videoPatterns),
+          replaySegments: analyzeReplayPatterns(videoPatterns),
+        },
+        conceptProgress: userProgress.conceptMastery,
+        overallProgress: {
+          completedVideos: Object.values(userProgress.subjects)
+            .reduce((sum, subject) => sum + subject.completedVideos.length, 0),
+          averageQuizScore: Object.values(userProgress.subjects)
+            .reduce((sum, subject) => {
+              const scores = Object.values(subject.quizScores);
+              return scores.length ? sum + (scores.reduce((a, b) => a + b, 0) / scores.length) : sum;
+            }, 0) / Object.keys(userProgress.subjects).length,
+        },
+      };
+
+      // Initialize OpenAI
+      const openai = new OpenAI({apiKey: openaiApiKey.value()});
+
+      // Analyze learning patterns with GPT
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert in learning analytics and educational psychology. 
+            Analyze learning patterns to identify optimal learning strategies.
+            Focus on:
+            1. Preferred content types based on engagement
+            2. Optimal study duration based on performance
+            3. Best performing time periods
+            4. Learning pace and progression patterns
+            5. Concept connection understanding`,
+          },
+          {
+            role: "user",
+            content: `Analyze this learning history and determine optimal learning parameters:
+            ${JSON.stringify(learningData, null, 2)}
+            
+            Return a structured analysis following this format:
+            {
+              "preferredContentTypes": ["video", "interactive", "text", etc.],
+              "optimalDuration": minutes (number),
+              "challengeLevel": 0-100 (number),
+              "conceptConnections": ["concept-ids"],
+              "learningPace": "fast" | "medium" | "slow"
+            }`,
+          },
+        ],
+        temperature: 0.7,
+        response_format: {type: "json_object"},
+      });
+
+      const analysis = JSON.parse(completion.choices[0].message.content || "{}");
+      logger.info("Learning style analysis completed:", analysis);
+
+      // Save analysis to user's profile
+      await dbOperations.update(userProgressRef, {
+        learningStyle: {
+          ...analysis,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+
+      return {analysis};
+    } catch (error) {
+      logger.error("Error in analyzeLearningStyle:", error);
+      throw error;
+    }
+  }
+);
+
+export const analyzeKnowledgeGaps = onCall(
+  {
+    secrets: [openaiApiKey],
+    region: "us-central1",
+  },
+  async (request: CallableRequest<{ userId: string; subjectId: string }>) => {
+    try {
+      const {userId, subjectId} = request.data;
+      logger.info("Starting knowledge gap analysis:", {userId, subjectId});
+
+      // Get subject and concept data
+      const subjectDoc = await dbOperations.getDoc(createRef.doc("subjects", subjectId));
+      const subject = subjectDoc.data();
+
+      // Get all concepts for this subject
+      const conceptsRef = createRef.collection("concepts");
+      const conceptsQuery = createQuery.where(conceptsRef, "subjectId", "==", subjectId);
+      const conceptsSnapshot = await dbOperations.getDocs(conceptsQuery);
+      const concepts = conceptsSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Get user's quiz attempts and performance data
+      const quizAttemptsRef = createRef.collection(`users/${userId}/quizAttempts`);
+      const quizSnapshot = await dbOperations.getDocs(quizAttemptsRef);
+      const quizAttempts = quizSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        ...doc.data(),
+        timestamp: doc.data().completedAt?.toDate(),
+      }));
+
+      // Get user's progress
+      const progressRef = createRef.doc("users", userId, "progress", "learning");
+      const progressDoc = await dbOperations.getDoc(progressRef);
+      const progress = progressDoc.data() as UserProgress;
+
+      // Prepare comprehensive analysis data
+      const analysisData = {
+        subject,
+        concepts,
+        conceptRelationships: subject?.knowledgeGraph || {},
+        userPerformance: {
+          quizAttempts,
+          conceptMastery: progress.conceptMastery,
+          completedVideos: progress.subjects[subjectId]?.completedVideos || [],
+          reflections: progress.subjects[subjectId]?.reflections || [],
+        },
+      };
+
+      // Initialize OpenAI
+      const openai = new OpenAI({apiKey: openaiApiKey.value()});
+
+      // Analyze knowledge gaps with GPT
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert in educational assessment and knowledge mapping.
+            Analyze learning patterns to identify:
+            1. Knowledge gaps and weak areas
+            2. Misconceptions and error patterns
+            3. Missing prerequisite knowledge
+            4. Recommended focus areas
+            5. Confidence levels in different concepts`,
+          },
+          {
+            role: "user",
+            content: `Analyze this learning data to identify knowledge gaps and learning needs:
+            ${JSON.stringify(analysisData, null, 2)}
+            
+            Return a structured analysis following this format:
+            {
+              "weakConcepts": ["concept-ids"],
+              "misunderstoodRelationships": ["relationship-descriptions"],
+              "recommendedPractice": ["practice-suggestions"],
+              "confidenceScores": {
+                "concept-id": confidence-score (0-100)
+              }
+            }`,
+          },
+        ],
+        temperature: 0.7,
+        response_format: {type: "json_object"},
+      });
+
+      const analysis = JSON.parse(completion.choices[0].message.content || "{}");
+      logger.info("Knowledge gap analysis completed:", analysis);
+
+      // Save analysis results
+      await dbOperations.update(progressRef, {
+        [`subjects.${subjectId}.gapAnalysis`]: {
+          ...analysis,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+
+      return {analysis};
+    } catch (error) {
+      logger.error("Error in analyzeKnowledgeGaps:", error);
+      throw error;
+    }
+  }
+);
+
+/**
+ * Calculate average score from quiz attempts
+ * @param {QuizAttempt[]} attempts - Array of quiz attempts to analyze
+ * @return {number} The average score across all attempts
+ */
+function calculateAverageScore(attempts: QuizAttempt[]): number {
+  return attempts.reduce((sum, attempt) => sum + attempt.score, 0) / attempts.length;
+}
+
+interface TimeDistribution {
+  [hour: number]: number;
+}
+
+interface ReplayDistribution {
+  [videoId: string]: number;
+}
+
+/**
+ * Analyze time distribution of quiz attempts
+ * @param {QuizAttempt[]} attempts - Array of quiz attempts to analyze
+ * @return {TimeDistribution} Distribution of attempts by hour
+ */
+function analyzeTimeDistribution(attempts: QuizAttempt[]): TimeDistribution {
+  return attempts.reduce((distribution: TimeDistribution, attempt) => {
+    const hour = new Date(attempt.completedAt).getHours();
+    return {
+      ...distribution,
+      [hour]: (distribution[hour] || 0) + 1,
+    };
+  }, {});
+}
+
+/**
+ * Find error patterns in quiz attempts
+ * @param {QuizAttempt[]} attempts - Array of quiz attempts to analyze
+ * @return {string[]} Array of identified error patterns
+ */
+function findErrorPatterns(attempts: QuizAttempt[]): string[] {
+  return attempts.reduce((patterns, attempt) => {
+    if (attempt.wrongAnswers?.length) {
+      patterns.push(...attempt.wrongAnswers);
+    }
+    return patterns;
+  }, [] as string[]);
+}
+
+/**
+ * Calculate average watch time from video patterns
+ * @param {VideoPlaybackPattern[]} patterns - Array of video playback patterns
+ * @return {number} Average watch time in seconds
+ */
+function calculateAverageWatchTime(patterns: VideoPlaybackPattern[]): number {
+  return patterns.reduce((sum, pattern) => sum + pattern.duration, 0) / patterns.length;
+}
+
+/**
+ * Find preferred study times from video patterns
+ * @param {VideoPlaybackPattern[]} patterns - Array of video playback patterns
+ * @return {string[]} Array of preferred study hours
+ */
+function findPreferredStudyTimes(patterns: VideoPlaybackPattern[]): string[] {
+  return patterns.reduce((times, pattern) => {
+    const hour = new Date(pattern.timestamp).getHours();
+    return times.includes(hour.toString()) ? times : [...times, hour.toString()];
+  }, [] as string[]);
+}
+
+/**
+ * Analyze video replay patterns
+ * @param {VideoPlaybackPattern[]} patterns - Array of video playback patterns
+ * @return {ReplayDistribution} Distribution of replays by video ID
+ */
+function analyzeReplayPatterns(patterns: VideoPlaybackPattern[]): ReplayDistribution {
+  return patterns.reduce((replays: ReplayDistribution, pattern) => {
+    return {
+      ...replays,
+      [pattern.videoId]: (replays[pattern.videoId] || 0) + 1,
+    };
+  }, {});
+}
+
+interface QuizAttempt {
+  score: number;
+  completedAt: Date;
+  wrongAnswers?: string[];
+}
+
+interface VideoPlaybackPattern {
+  videoId: string;
+  timestamp: Date;
+  duration: number;
+  replaySegments?: string[];
 }

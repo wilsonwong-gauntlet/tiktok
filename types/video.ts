@@ -272,6 +272,10 @@ export interface ConceptMastery {
   strengthByTopic: {
     [topicId: string]: number;  // 0-100
   };
+  reviewHistory: {
+    date: Date;
+    performance: 'easy' | 'medium' | 'hard';
+  }[];
 }
 
 export interface LearningPreferences {

@@ -4,7 +4,8 @@ import {
   StyleSheet,
   FlatList,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Text
 } from 'react-native';
 import { Video } from '../types/video';
 import { VideoService } from '../services/firebase/video';
@@ -66,6 +67,11 @@ export default function VideoGrid({ subjectId }: VideoGridProps) {
       )}
       keyExtractor={item => item.id}
       contentContainerStyle={styles.grid}
+      ListEmptyComponent={() => (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No videos available</Text>
+        </View>
+      )}
     />
   );
 }
@@ -78,10 +84,22 @@ const styles = StyleSheet.create({
   },
   grid: {
     padding: GRID_SPACING,
+    minHeight: '100%',
   },
   gridItem: {
     width: ITEM_WIDTH,
     marginBottom: GRID_SPACING,
     marginHorizontal: GRID_SPACING / 2,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
   },
 }); 

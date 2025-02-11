@@ -1210,7 +1210,7 @@ export default function SubjectDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -1235,20 +1235,15 @@ export default function SubjectDetailScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* Introduction Section */}
-        <View style={styles.section}>
-          <Text style={styles.description}>{subject?.description}</Text>
-        </View>
-
         {showLearningPath ? (
           <LearningPathView subjectId={subject.id} />
         ) : (
-          <VideoGrid subjectId={subject.id} />
+          <View style={styles.videoContainer}>
+            <VideoGrid subjectId={subject.id} />
+          </View>
         )}
-                {renderSectionContent()}
-
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -1275,7 +1270,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 40,
+    flex: 1,
   },
   description: {
     fontSize: 16,
@@ -1938,5 +1933,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: '#1a472a',
     fontWeight: '500',
+  },
+  videoContainer: {
+    flex: 1,
+    backgroundColor: '#111',
   },
 }); 

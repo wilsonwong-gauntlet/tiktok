@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Linking, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FurtherReading, VideoSummary, Video, TranscriptionSegment } from '../types/video';
+import { FurtherReading, VideoSummary, Video, TranscriptionSegment, ChapterMarker, SmartSeekResult } from '../types/video';
 import { saveNote, getNoteForVideo, saveQuizAttempt } from '../services/firebase/learning';
 import { VideoService } from '../services/firebase/video';
 import { auth } from '../services/firebase/index';
@@ -22,9 +22,9 @@ interface LearningPanelProps {
   furtherReading?: FurtherReading[];
   quiz?: Quiz;
   transcription?: string;
-  transcriptionStatus?: 'pending' | 'completed' | 'error';
+  transcriptionStatus?: string;
   onQuizGenerated?: (quiz: Quiz) => void;
-  onFurtherReadingGenerated?: (reading: FurtherReading[]) => void;
+  onFurtherReadingGenerated?: (recommendations: FurtherReading[]) => void;
 }
 
 type Tab = 'summary' | 'notes' | 'quiz' | 'reading' | 'transcription';
@@ -657,7 +657,7 @@ export default function LearningPanel({
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       transparent={true}
       onRequestClose={onClose}
     >
@@ -669,7 +669,7 @@ export default function LearningPanel({
               style={styles.closeButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="chevron-down" size={24} color="#fff" />
+              <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
           </View>
@@ -717,18 +717,6 @@ export default function LearningPanel({
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
-            <View style={styles.statusIndicators}>
-              {[
-                { id: 'summary', complete: !!summary },
-                { id: 'transcription', complete: transcriptionStatus === 'completed' },
-                { id: 'notes', complete: notes.content.length > 0 },
-                { id: 'quiz', complete: !!quiz },
-                { id: 'reading', complete: furtherReading && furtherReading.length > 0 }
-              ].map(item => item.complete && (
-                <View key={item.id} style={styles.statusDot} />
-              ))}
-            </View>
           </View>
 
           <View style={styles.content}>
@@ -836,19 +824,6 @@ const styles = StyleSheet.create({
   activeNavLabel: {
     color: '#9580FF',
     fontWeight: '600',
-  },
-  statusIndicators: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 8,
-    gap: 4,
-  },
-  statusDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#9580FF',
   },
   content: {
     flex: 1,

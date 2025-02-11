@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Animated, TextInput, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Animated, TextInput, Image, ScrollView, Modal } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { Video as VideoType, Subject, Quiz, FurtherReading, ChapterMarker, SmartSeekResult } from '../types/video';
@@ -236,6 +236,7 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
   const [searchResults, setSearchResults] = useState<SmartSeekResult[]>([]);
   const [chapterMarkers, setChapterMarkers] = useState<ChapterMarker[]>([]);
   const [showChapters, setShowChapters] = useState(false);
+  const [navigationPanelVisible, setNavigationPanelVisible] = useState(false);
 
   // Optimize currentTime updates with useRef to avoid re-renders
   const timeRef = useRef(0);
@@ -510,86 +511,6 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
         )}
 
         <View style={styles.overlay}>
-          {/* Smart Seek Search Bar */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search in video..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={() => handleSmartSeek(searchQuery)}
-              placeholderTextColor="rgba(255, 255, 255, 0.6)"
-            />
-            {isSearching ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <TouchableOpacity onPress={() => handleSmartSeek(searchQuery)}>
-                <Ionicons name="search-outline" size={24} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Search Results */}
-          {searchResults.length > 0 && (
-            <ScrollView style={styles.searchResults}>
-              {searchResults.map((result, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.searchResult}
-                  onPress={() => handleSeekToResult(result.timestamp)}
-                >
-                  {result.previewThumbnail && (
-                    <Image
-                      source={{ uri: result.previewThumbnail }}
-                      style={styles.previewThumbnail}
-                    />
-                  )}
-                  <View style={styles.resultContent}>
-                    <Text style={styles.resultTimestamp}>
-                      {formatTime(result.timestamp)}
-                    </Text>
-                    <Text style={styles.resultContext} numberOfLines={2}>
-                      {result.context}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-
-          <TouchableOpacity
-            style={styles.chaptersButton}
-            onPress={() => setShowChapters(!showChapters)}
-          >
-            <Ionicons 
-              name={showChapters ? "list" : "list-outline"} 
-              size={24} 
-              color="#fff" 
-            />
-          </TouchableOpacity>
-
-          {showChapters && chapterMarkers.length > 0 && (
-            <ScrollView style={styles.chaptersContainer}>
-              {chapterMarkers.map((chapter, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.chapterItem}
-                  onPress={() => handleSeekToResult(chapter.timestamp)}
-                >
-                  <Text style={styles.chapterTimestamp}>
-                    {formatTime(chapter.timestamp)}
-                  </Text>
-                  <View style={styles.chapterContent}>
-                    <Text style={styles.chapterTitle}>{chapter.title}</Text>
-                    <Text style={styles.chapterSummary} numberOfLines={1}>
-                      {chapter.summary}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-
           <View style={styles.rightActions}>
             <ActionButton
               icon={saved ? "bookmark" : "bookmark-outline"}
@@ -606,6 +527,11 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
               icon="school-outline"
               label="Learn"
               onPress={handleLearn}
+            />
+            <ActionButton
+              icon="search-outline"
+              label="Find"
+              onPress={() => setNavigationPanelVisible(true)}
             />
           </View>
 
@@ -647,6 +573,105 @@ export default function VideoCard({ video, isActive, containerHeight, isModal = 
           </Animated.View>
         </View>
       </TouchableOpacity>
+
+      <Modal
+        visible={navigationPanelVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setNavigationPanelVisible(false)}
+      >
+        <View style={styles.navigationModal}>
+          <View style={styles.navigationPanel}>
+            <View style={styles.navigationHeader}>
+              <TouchableOpacity 
+                onPress={() => setNavigationPanelVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.navigationTitle}>Find in Video</Text>
+            </View>
+
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search in video..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={() => handleSmartSeek(searchQuery)}
+                  placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                />
+                {isSearching ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <TouchableOpacity onPress={() => handleSmartSeek(searchQuery)}>
+                    <Ionicons name="search-outline" size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {searchResults.length > 0 && (
+                <ScrollView style={styles.searchResults}>
+                  {searchResults.map((result, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.searchResult}
+                      onPress={() => {
+                        handleSeekToResult(result.timestamp);
+                        setNavigationPanelVisible(false);
+                      }}
+                    >
+                      {result.previewThumbnail && (
+                        <Image
+                          source={{ uri: result.previewThumbnail }}
+                          style={styles.previewThumbnail}
+                        />
+                      )}
+                      <View style={styles.resultContent}>
+                        <Text style={styles.resultTimestamp}>
+                          {formatTime(result.timestamp)}
+                        </Text>
+                        <Text style={styles.resultContext} numberOfLines={2}>
+                          {result.context}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {chapterMarkers && chapterMarkers.length > 0 && (
+                <View style={styles.chaptersSection}>
+                  <Text style={styles.sectionTitle}>Chapters</Text>
+                  <ScrollView style={styles.chaptersContainer}>
+                    {chapterMarkers.map((chapter, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.chapterItem}
+                        onPress={() => {
+                          handleSeekToResult(chapter.timestamp);
+                          setNavigationPanelVisible(false);
+                        }}
+                      >
+                        <Text style={styles.chapterTimestamp}>
+                          {formatTime(chapter.timestamp)}
+                        </Text>
+                        <View style={styles.chapterContent}>
+                          <Text style={styles.chapterTitle}>{chapter.title}</Text>
+                          <Text style={styles.chapterSummary} numberOfLines={1}>
+                            {chapter.summary}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <MemoizedLearningPanel
         visible={learningPanelVisible}
@@ -879,45 +904,71 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  searchContainer: {
-    position: 'absolute',
-    top: 120,
-    left: 20,
-    right: 70,
+  navigationModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  },
+  navigationPanel: {
+    flex: 1,
+    backgroundColor: '#111',
+    marginTop: 100, // Leave space at top for better UX
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  navigationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 8,
-    padding: 8,
-    zIndex: 3,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  navigationTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
   },
   searchInput: {
     flex: 1,
     color: '#fff',
     fontSize: 16,
     marginRight: 8,
-    padding: 8,
   },
   searchResults: {
-    position: 'absolute',
-    top: 180,
-    left: 20,
-    right: 20,
     maxHeight: 200,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 8,
-    zIndex: 3,
+    marginBottom: 16,
   },
   searchResult: {
     flexDirection: 'row',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 8,
   },
   previewThumbnail: {
     width: 80,
     height: 45,
-    borderRadius: 4,
+    borderRadius: 6,
     marginRight: 12,
   },
   resultContent: {
@@ -933,33 +984,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
   },
-  chaptersButton: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3,
+  chaptersSection: {
+    marginTop: 24,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   chaptersContainer: {
-    position: 'absolute',
-    top: 110,
-    right: 20,
-    width: 280,
     maxHeight: 300,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 8,
-    zIndex: 3,
   },
   chapterItem: {
     flexDirection: 'row',
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 8,
   },
   chapterTimestamp: {
     color: '#1a472a',
