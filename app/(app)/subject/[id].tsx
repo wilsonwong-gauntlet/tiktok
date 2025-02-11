@@ -157,10 +157,9 @@ export default function SubjectDetailScreen() {
   const [quizAttempts, setQuizAttempts] = useState<Record<string, QuizAttempt | null>>({});
   const [expandedReadingRows, setExpandedReadingRows] = useState<Set<string>>(new Set());
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [showLearningPath, setShowLearningPath] = useState(false);
 
   useEffect(() => {
-    loadSubjectAndVideos();
+    loadSubject();
   }, [id]);
 
   useEffect(() => {
@@ -220,7 +219,7 @@ export default function SubjectDetailScreen() {
     }
   };
 
-  const loadSubjectAndVideos = async () => {
+  const loadSubject = async () => {
     if (!auth.currentUser || !id) {
       console.log('Missing required data:', { auth: !!auth.currentUser, id });
       return;
@@ -230,7 +229,7 @@ export default function SubjectDetailScreen() {
       setLoading(true);
       setError(null);
       
-      console.log('Loading subject and videos for:', {
+      console.log('Loading subject:', {
         subjectId: id,
         userId: auth.currentUser.uid
       });
@@ -1201,7 +1200,7 @@ export default function SubjectDetailScreen() {
       <View style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error || 'Subject not found'}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadSubjectAndVideos}>
+          <TouchableOpacity style={styles.retryButton} onPress={loadSubject}>
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -1219,34 +1218,14 @@ export default function SubjectDetailScreen() {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.title}>{subject.name}</Text>
-        <TouchableOpacity
-          style={styles.pathToggle}
-          onPress={() => setShowLearningPath(!showLearningPath)}
-        >
-          <Ionicons
-            name={showLearningPath ? "school" : "school-outline"}
-            size={24}
-            color="#1a472a"
-          />
-          <Text style={styles.pathToggleText}>
-            {showLearningPath ? "View Videos" : "Learning Path"}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
-        {showLearningPath ? (
-          <LearningPathView subjectId={subject.id} />
-        ) : (
-          <View style={styles.videoContainer}>
-            <VideoGrid subjectId={subject.id} />
-          </View>
-        )}
+        {renderSectionContent()}
       </View>
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1905,7 +1884,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-
   videoDuration: {
     color: '#666',
     fontSize: 14,
@@ -1917,25 +1895,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 16,
   },
-
   savedVideoItem: {
     borderColor: '#1a472a',
     borderWidth: 1,
-  },
-  pathToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f9f7',
-    padding: 8,
-    borderRadius: 8,
-  },
-  pathToggleText: {
-    marginLeft: 8,
-    color: '#1a472a',
-    fontWeight: '500',
-  },
-  videoContainer: {
-    flex: 1,
-    backgroundColor: '#111',
   },
 }); 
