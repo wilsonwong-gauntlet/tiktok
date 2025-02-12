@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -74,6 +74,7 @@ export default function LearningScreen() {
     insights: [],
     lastFetched: {},
   });
+  const [refreshing, setRefreshing] = useState(false);
 
   // Expose refresh function globally
   useEffect(() => {
@@ -123,7 +124,7 @@ export default function LearningScreen() {
     }
   };
 
-  const loadTabData = async () => {
+  const loadTabData = async (bypassCache: boolean = false) => {
     if (!auth.currentUser) return;
     
     // Don't load data for overview tab
@@ -139,7 +140,7 @@ export default function LearningScreen() {
     
     // Check if we have valid cached data
     const lastFetched = cachedData.lastFetched[cacheKey[activeTab]];
-    const isCacheValid = lastFetched && (Date.now() - lastFetched) < CACHE_DURATION;
+    const isCacheValid = !bypassCache && lastFetched && (Date.now() - lastFetched) < CACHE_DURATION;
     
     if (isCacheValid) {
       console.log('Using cached data for', activeTab);
@@ -353,55 +354,79 @@ export default function LearningScreen() {
     </View>
   );
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Reload all data with cache bypass
+      await loadInitialData();
+      await loadTabData(true);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor="#9580FF"
+      colors={['#9580FF']}
+    />
+  );
+
   const renderOverviewTab = () => (
-    <View style={styles.container}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Active Subjects ({activeSubjects.length})</Text>
-      </View>
-      <FlatList
-        data={activeSubjects}
-        renderItem={({ item: subject }) => (
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => router.push(`/subject/${subject.id}`)}
-          >
-            <View style={styles.rowContent}>
-              <View style={styles.rowHeader}>
-                <View style={styles.rowLeft}>
-                  <Ionicons name="school-outline" size={16} color="#666" />
-                  <Text style={styles.rowTitle}>{subject.name}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="#666" />
+    <FlatList
+      data={activeSubjects}
+      ListHeaderComponent={() => (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Active Subjects ({activeSubjects.length})</Text>
+        </View>
+      )}
+      renderItem={({ item: subject }) => (
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => router.push(`/subject/${subject.id}`)}
+        >
+          <View style={styles.rowContent}>
+            <View style={styles.rowHeader}>
+              <View style={styles.rowLeft}>
+                <Ionicons name="school-outline" size={16} color="#666" />
+                <Text style={styles.rowTitle}>{subject.name}</Text>
               </View>
-              <View style={styles.rowMeta}>
-                <Text style={styles.metaText}>
-                  {subject.completedVideos} videos watched • {
-                    userProgress?.subjects?.[subject.id]?.quizScores ? 
-                    new Set(Object.keys(userProgress.subjects[subject.id].quizScores)
-                      .map(attemptId => attemptId.split('_')[0])).size : 0
-                  } quizzes completed
-                </Text>
-              </View>
+              <Ionicons name="chevron-forward" size={16} color="#666" />
             </View>
-          </TouchableOpacity>
-        )}
-        keyExtractor={item => item.id}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              No active subjects. Start learning!
-            </Text>
-            <TouchableOpacity 
-              style={styles.browseButton}
-              onPress={() => router.push('/(app)/(tabs)/subjects')}
-            >
-              <Text style={styles.browseButtonText}>Browse Subjects</Text>
-            </TouchableOpacity>
+            <View style={styles.rowMeta}>
+              <Text style={styles.metaText}>
+                {subject.completedVideos} videos watched • {
+                  userProgress?.subjects?.[subject.id]?.quizScores ? 
+                  new Set(Object.keys(userProgress.subjects[subject.id].quizScores)
+                    .map(attemptId => attemptId.split('_')[0])).size : 0
+                } quizzes completed
+              </Text>
+            </View>
           </View>
-        }
-      />
-    </View>
+        </TouchableOpacity>
+      )}
+      keyExtractor={item => item.id}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      ListEmptyComponent={
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            No active subjects. Start learning!
+          </Text>
+          <TouchableOpacity 
+            style={styles.browseButton}
+            onPress={() => router.push('/(app)/(tabs)/subjects')}
+          >
+            <Text style={styles.browseButtonText}>Browse Subjects</Text>
+          </TouchableOpacity>
+        </View>
+      }
+      refreshControl={refreshControl}
+      style={styles.container}
+    />
   );
 
   const renderContent = () => {
@@ -418,30 +443,58 @@ export default function LearningScreen() {
         return renderOverviewTab();
       case 'reading':
         return (
-          <ReadingList 
-            readings={cachedData.readings} 
-            loading={isLoading}
+          <FlatList
+            data={[1]}
+            renderItem={() => (
+              <ReadingList 
+                readings={cachedData.readings} 
+                loading={isLoading}
+              />
+            )}
+            refreshControl={refreshControl}
+            style={styles.container}
           />
         );
       case 'insights':
         return (
-          <SavedInsights 
-            cachedInsights={cachedData.insights}
-            loading={isLoading}
+          <FlatList
+            data={[1]}
+            renderItem={() => (
+              <SavedInsights 
+                cachedInsights={cachedData.insights}
+                loading={isLoading}
+              />
+            )}
+            refreshControl={refreshControl}
+            style={styles.container}
           />
         );
       case 'quizzes':
         return (
-          <QuizList 
-            cachedQuizzes={cachedData.quizzes}
-            loading={isLoading}
+          <FlatList
+            data={[1]}
+            renderItem={() => (
+              <QuizList 
+                cachedQuizzes={cachedData.quizzes}
+                loading={isLoading}
+              />
+            )}
+            refreshControl={refreshControl}
+            style={styles.container}
           />
         );
       case 'notes':
         return (
-          <NotesList 
-            cachedNotes={cachedData.notes}
-            loading={isLoading}
+          <FlatList
+            data={[1]}
+            renderItem={() => (
+              <NotesList 
+                cachedNotes={cachedData.notes}
+                loading={isLoading}
+              />
+            )}
+            refreshControl={refreshControl}
+            style={styles.container}
           />
         );
       default:
