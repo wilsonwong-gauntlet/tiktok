@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { CoachingPrompt } from '../types/video';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,71 +11,94 @@ interface CoachingPromptsProps {
   isGenerating?: boolean;
 }
 
-export default function CoachingPrompts({ 
-  prompts, 
-  currentTime, 
+const TIMING = {
+  FADE_IN_DURATION: 1000,
+  FADE_OUT_DURATION: 1000,
+  DISPLAY_DURATION: 10000,
+  APPEAR_BEFORE: 1, // Start showing 1s before timestamp
+  STAY_AFTER: 10, // Keep showing for 10s after timestamp
+};
+
+export default function CoachingPrompts({
+  prompts,
+  currentTime,
   onGeneratePrompts,
-  isGenerating = false 
+  isGenerating = false,
 }: CoachingPromptsProps) {
-  const [currentPrompt, setCurrentPrompt] = useState<CoachingPrompt | null>(null);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const dismissTimeout = useRef<NodeJS.Timeout>();
+  const [activePrompt, setActivePrompt] = useState<CoachingPrompt | null>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeOutTimer = useRef<NodeJS.Timeout>();
+  const isAnimating = useRef(false);
 
-  // Simplified timing constants
-  const PROMPT_WINDOW = 3; // Show prompts within 3 seconds of timestamp
-  const ANIMATION_DURATION = 1000; // 1 second for all animations
-  const VISIBILITY_DURATION = 5000; // Show for 5 seconds
-
-  useEffect(() => {
-    // Find prompt that matches current time
-    const activePrompt = prompts.find(prompt => {
-      const timeDiff = Math.abs(prompt.timestamp - currentTime);
-      return timeDiff <= PROMPT_WINDOW;
-    });
-
-    // Handle prompt changes
-    if (activePrompt !== currentPrompt) {
-      // Clear any existing timeout
-      if (dismissTimeout.current) {
-        clearTimeout(dismissTimeout.current);
-      }
-
-      if (activePrompt) {
-        // Show new prompt
-        setCurrentPrompt(activePrompt);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: ANIMATION_DURATION,
-          easing: Easing.bezier(0.4, 0, 0.2, 1),
-          useNativeDriver: true,
-        }).start();
-
-        // Set dismiss timeout
-        dismissTimeout.current = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: ANIMATION_DURATION,
-            easing: Easing.bezier(0.4, 0, 0.2, 1),
-            useNativeDriver: true,
-          }).start(() => setCurrentPrompt(null));
-        }, VISIBILITY_DURATION);
-      } else {
-        // Fade out current prompt
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: ANIMATION_DURATION,
-          easing: Easing.bezier(0.4, 0, 0.2, 1),
-          useNativeDriver: true,
-        }).start(() => setCurrentPrompt(null));
-      }
+  const showPrompt = useCallback((prompt: CoachingPrompt) => {
+    // Clear any existing fade out timer
+    if (fadeOutTimer.current) {
+      clearTimeout(fadeOutTimer.current);
     }
 
+    setActivePrompt(prompt);
+    isAnimating.current = true;
+
+    // Fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: TIMING.FADE_IN_DURATION,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      isAnimating.current = false;
+    });
+  }, []);
+
+  const hidePrompt = useCallback(() => {
+    if (isAnimating.current) return;
+
+    isAnimating.current = true;
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: TIMING.FADE_OUT_DURATION,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      isAnimating.current = false;
+      setActivePrompt(null);
+    });
+  }, []);
+
+  // Handle prompt timing
+  useEffect(() => {
+    if (!prompts.length) return;
+
+    // Find the next prompt that should be shown
+    const nextPrompt = prompts.find(prompt => {
+      const timeDiff = currentTime - prompt.timestamp;
+      // Show prompt if we're within the window before timestamp
+      // and keep showing it for STAY_AFTER seconds after timestamp
+      return timeDiff >= -TIMING.APPEAR_BEFORE && timeDiff <= TIMING.STAY_AFTER;
+    });
+
+    if (nextPrompt) {
+      // Only show if it's a different prompt or we're not currently showing one
+      if (!activePrompt || nextPrompt.timestamp !== activePrompt.timestamp) {
+        showPrompt(nextPrompt);
+      }
+    } else if (activePrompt) {
+      // If we have an active prompt but no next prompt, check if we should hide it
+      const timeSincePrompt = currentTime - activePrompt.timestamp;
+      if (timeSincePrompt < -TIMING.APPEAR_BEFORE || timeSincePrompt > TIMING.STAY_AFTER) {
+        hidePrompt();
+      }
+    }
+  }, [currentTime, prompts, activePrompt, showPrompt, hidePrompt]);
+
+  // Cleanup
+  useEffect(() => {
     return () => {
-      if (dismissTimeout.current) {
-        clearTimeout(dismissTimeout.current);
+      if (fadeOutTimer.current) {
+        clearTimeout(fadeOutTimer.current);
       }
     };
-  }, [currentTime, prompts]);
+  }, []);
 
   if (isGenerating) {
     return (
@@ -90,8 +113,8 @@ export default function CoachingPrompts({
   if (!prompts.length && onGeneratePrompts) {
     return (
       <View style={styles.container}>
-        <TouchableOpacity 
-          style={styles.generateButton} 
+        <TouchableOpacity
+          style={styles.generateButton}
           onPress={onGeneratePrompts}
         >
           <Text style={styles.generateButtonText}>Generate Coaching Prompts</Text>
@@ -100,10 +123,10 @@ export default function CoachingPrompts({
     );
   }
 
-  if (!currentPrompt) return null;
+  if (!activePrompt) return null;
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
         styles.container,
         {
@@ -112,7 +135,6 @@ export default function CoachingPrompts({
             translateY: fadeAnim.interpolate({
               inputRange: [0, 1],
               outputRange: [-20, 0],
-              extrapolate: 'clamp',
             }),
           }],
         },
@@ -126,17 +148,17 @@ export default function CoachingPrompts({
       >
         <View style={styles.promptContent}>
           <View style={styles.iconContainer}>
-            <Ionicons 
+            <Ionicons
               name={
-                currentPrompt.type === 'reflection' ? 'bulb-outline' :
-                currentPrompt.type === 'action' ? 'checkmark-circle-outline' :
+                activePrompt.type === 'reflection' ? 'bulb-outline' :
+                activePrompt.type === 'action' ? 'checkmark-circle-outline' :
                 'git-branch-outline'
-              } 
+              }
               size={20}
-              color="#fff" 
+              color="#fff"
             />
           </View>
-          <Text style={styles.promptText}>{currentPrompt.text}</Text>
+          <Text style={styles.promptText}>{activePrompt.text}</Text>
         </View>
       </LinearGradient>
     </Animated.View>
