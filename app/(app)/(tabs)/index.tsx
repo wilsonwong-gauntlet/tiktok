@@ -118,6 +118,7 @@ export default function Home() {
       <VideoCard 
         video={item} 
         isActive={index === currentIndex} 
+        containerHeight={SCREEN_HEIGHT}
         onVideoComplete={handleVideoComplete}
       />
     </View>
@@ -199,8 +200,7 @@ const styles = StyleSheet.create({
   videoContainer: {
     width: WINDOW_WIDTH,
     backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
   },
   centerContainer: {
     flex: 1,
