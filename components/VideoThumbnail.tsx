@@ -1,44 +1,68 @@
 import React from 'react';
-import { View, Image, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
-import { Video } from '../types/video';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { Video } from '../types/video';
 
-interface VideoThumbnailProps {
+interface Props {
   video: Video;
+  progress?: number;
   onPress?: () => void;
 }
 
-const { width: WINDOW_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns with padding
 const THUMBNAIL_ASPECT_RATIO = 16 / 9;
-const THUMBNAIL_WIDTH = WINDOW_WIDTH - 32; // Full width minus padding
-const THUMBNAIL_HEIGHT = THUMBNAIL_WIDTH / THUMBNAIL_ASPECT_RATIO;
 
-export default function VideoThumbnail({ video, onPress }: VideoThumbnailProps) {
+export const VideoThumbnail: React.FC<Props> = ({ video, progress, onPress }) => {
   return (
     <TouchableOpacity 
       style={styles.container}
       onPress={onPress}
-      disabled={!onPress}
+      activeOpacity={0.7}
     >
-      <Image
-        source={{ uri: video.thumbnailUrl }}
-        style={styles.thumbnail}
-        resizeMode="cover"
-      />
-      <View style={styles.duration}>
-        <Text style={styles.durationText}>
-          {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
+      <View style={styles.thumbnailContainer}>
+        <Image
+          source={{ uri: video.thumbnailUrl }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+        />
+        <View style={styles.duration}>
+          <Text style={styles.durationText}>
+            {Math.floor(video.duration / 60)}:{String(Math.floor(video.duration % 60)).padStart(2, '0')}
+          </Text>
+        </View>
+        {progress !== undefined && progress > 0 && (
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${progress}%` }]} />
+          </View>
+        )}
+      </View>
+      <View style={styles.details}>
+        <Text style={styles.title} numberOfLines={2}>
+          {video.title}
+        </Text>
+        <Text style={styles.author} numberOfLines={1}>
+          {video.authorName}
+        </Text>
+        <Text style={styles.views}>
+          {video.viewCount.toLocaleString()} views
         </Text>
       </View>
     </TouchableOpacity>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
-    height: THUMBNAIL_HEIGHT,
-    backgroundColor: '#000',
-    position: 'relative',
+    width: CARD_WIDTH,
+    marginBottom: 16,
+  },
+  thumbnailContainer: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH / THUMBNAIL_ASPECT_RATIO,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
   },
   thumbnail: {
     width: '100%',
@@ -57,5 +81,36 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
+  },
+  progressBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#9580FF',
+  },
+  details: {
+    padding: 8,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  author: {
+    color: '#999',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  views: {
+    color: '#666',
+    fontSize: 12,
   },
 }); 

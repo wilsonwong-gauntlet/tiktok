@@ -80,33 +80,19 @@ export interface Video {
   thumbnailUrl: string;
   duration: number;
   createdAt: Date;
-  
-  // Subject & Concept Relationships
-  subjectId: string;
-  conceptIds: string[];
-  relatedSubjects?: string[];
-  
-  // Metadata
-  tags: string[];
-  searchableText: string[];
-  viewCount: number;
+  updatedAt: Date;
   authorId: string;
   authorName: string;
-  
-  // Transcription
-  transcription?: string;
-  transcriptionStatus?: 'pending' | 'completed' | 'error';
-  transcriptionError?: string;
-  transcriptionSegments?: TranscriptionSegment[];
-  
-  // AI-Generated Content
-  summary?: VideoSummary;
-  furtherReading?: FurtherReading[];
+  subjectId: string;
+  conceptIds: string[];
+  viewCount: number;
   quiz?: Quiz;
-  coachingPrompts?: CoachingPrompt[];
-  promptsGeneratedAt?: Date;
-  chapterMarkers?: ChapterMarker[];
-  completed: boolean;
+  furtherReading?: Array<{
+    title: string;
+    author: string;
+    description: string;
+    url: string;
+  }>;
 }
 
 export interface FurtherReading {
@@ -204,25 +190,38 @@ export interface Concept {
   description: string;
   status: 'not_started' | 'in_progress' | 'mastered';
   prerequisites: string[];
+  videoIds: string[];
 }
 
 export interface Subject {
   id: string;
   name: string;
   description: string;
-  progress: number;
+  thumbnailUrl: string;
   concepts: Concept[];
-  prerequisites: string[];
-  videosCount: number;
+  conceptConnections: Array<{ from: string; to: string }>;
+  modules: Module[];
+  progress: number;
   completedVideos: number;
-  knowledgeGraph: GraphData;
+  videosCount: number;
+}
+
+export interface Module {
+  id: string;
+  title: string;
+  description: string;
+  order: number;
+  videoIds: string[];
+  conceptIds: string[];
+  prerequisites: string[];
 }
 
 export interface Reflection {
   id: string;
   content: string;
-  timestamp: Date;
-  conceptId: string;
+  type: 'understanding' | 'gap' | 'application' | 'connection';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface UserProgress {
@@ -312,4 +311,13 @@ export interface LearningPath {
   lastUpdated: Date;
   completionRate: number;
   averageScore: number;
+}
+
+export interface SubjectProgress extends UserProgress {
+  completedVideos: number;
+  totalVideos: number;
+  masteredConcepts: number;
+  totalConcepts: number;
+  lastActivity: Date | null;
+  streakDays: number;
 } 

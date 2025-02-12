@@ -103,7 +103,7 @@ export default function InsightDetailsScreen() {
           <Text style={styles.sectionTitle}>Key Points of Discussion</Text>
           {insight.valuableInsights.map((point, index) => (
             <View key={index} style={styles.point}>
-              <Ionicons name="bulb-outline" size={20} color="#1a472a" />
+              <Ionicons name="bulb-outline" size={20} color="#9580FF" />
               <Text style={styles.pointText}>{point}</Text>
             </View>
           ))}

@@ -167,6 +167,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   signUpButtonText: {
-    color: '#1a472a',
+    color: '#9580FF',
   },
 }); 
